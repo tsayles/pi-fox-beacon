@@ -211,6 +211,17 @@ summary: >
 
 ## 6. Typical Outputs
 
+- **KiCad schematic files (`.kicad_sch`):** New or revised schematics
+  produced from a design brief, block diagram, or net list — complete
+  with correct net names, power symbols, pin annotations, hierarchical
+  structure, and drawing-quality standards from §3.
+- **KiCad PCB files (`.kicad_pcb`):** New or revised board layouts
+  including component placement, routing, copper pours, DRC rule
+  regions, and fab/courtyard/silk layers — ready for DRC sign-off.
+- **KiCad project archives (`.kicad_pro` + supporting files):**
+  Complete project packages including symbol libraries, footprint
+  libraries, DRC rule files, and board setup — structured for version
+  control and hand-off to a board house or collaborator.
 - Schematic review findings: ERC violations, drawing-quality issues,
   functional-block grouping recommendations, label placement corrections,
   and net-naming suggestions.
@@ -279,6 +290,13 @@ summary: >
   conventions."
 - "What changed in the `.kicad_sch` S-expression format between
   KiCad 6 and KiCad 8 that could break my parser?"
+- "Take turns with rufus-rf-engineer designing an IF filtering board
+  with uFL input and output connectors with a narrow pass band around
+  21.42 MHz, minimize insertion loss, and keep the finished board under
+  25 mm × 50 mm with at least 2 M3 mounting holes. Rufus proposes the
+  filter topology and component values; you produce the `.kicad_sch`
+  and `.kicad_pcb` files and flag any layout or DRC concerns. Take
+  turns until consensus or 5 complete rounds."
 
 ## 10. References
 
