@@ -1,7 +1,7 @@
 # Beacon Configuration
 
 # Amateur radio callsign (required for legal identification)
-callsign: "N0CALL"
+callsign: "K7LED"  # M&K Club Call
 
 # Beacon timing
 beacon_interval_seconds: 60  # Time between beacon transmissions
@@ -58,19 +58,6 @@ message:
   # For tone type: frequency (Hz) and duration (seconds)
   tone_frequency: 1000
   tone_duration: 2.0
-  
-# Power stepping simulation
-# In MVP, we simulate power stepping by varying audio amplitude
-# Lower amplitude = lower VOX trigger reliability = effectively lower power
-power_steps:
-  enabled: false
-  
-  # List of power levels (0.0 to 1.0, relative to vox_trigger_level)
-  # Example: [1.0, 0.8, 0.6, 0.4] starts at full, steps down over time
-  levels: [1.0, 0.8, 0.6, 0.4]
-  
-  # Duration for each step (seconds)
-  step_duration_seconds: 300  # 5 minutes per step
 
 # Logging
 logging:

@@ -126,11 +126,13 @@ The Baofeng must be configured for VOX operation:
 
 ## Limitations vs. Full PiTower Design
 
-❌ **No RF power stepping** — can't attenuate the signal programmatically  
+❌ **No RF power stepping** — MVP uses fixed radio power level (HIGH=10W or LOW=5W)  
 ❌ **VOX latency** — ~100-500ms delay before transmission starts  
 ❌ **Less precise PTT control** — VOX may hold PTT longer than needed  
 ❌ **Audio quality dependent** — VOX sensitivity varies with tone/voice characteristics  
 ❌ **No hardware PTT** — can't do instant-on transmissions  
+
+**Note:** Audio amplitude does NOT affect FM carrier power. The radio transmits at full power (10W or 5W) regardless of audio level. Audio level only affects VOX triggering reliability, not transmitted signal strength or S-meter readings on receivers.
 
 ---
 

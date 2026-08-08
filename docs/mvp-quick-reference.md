@@ -66,7 +66,7 @@ Press **Ctrl+C** to stop.
 ### config.yaml Key Settings
 
 ```yaml
-callsign: "N0CALL"  # ← CHANGE THIS! Your amateur radio callsign
+callsign: "K7LED"  # ← CHANGE THIS to your callsign (K7LED is M&K Club Call)
 
 beacon_interval_seconds: 60  # Time between transmissions
 identification_interval_seconds: 600  # CW ID every 10 min (FCC)
