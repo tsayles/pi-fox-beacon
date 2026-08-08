@@ -11,22 +11,28 @@ identification_interval_seconds: 600  # CW ID every 10 minutes (FCC requirement)
 audio:
   # Device index (run test_audio.py to list available devices)
   # Use null to auto-select default output device
+  # UGREEN USB adapter typically shows as "USB Audio Device" or similar
   device_index: null
   
   # Sample rate (Hz)
+  # UGREEN adapter supports up to 96kHz, but 48kHz is sufficient for beacon
   sample_rate: 48000
   
   # VOX trigger level (0.0 to 1.0)
   # 0.5 = 50% of maximum amplitude
   # Adjust based on radio's VOX sensitivity
+  # Start with 0.6 and Baofeng VOX level 5, then tune as needed
+  # Too high = false triggers, too low = unreliable keying
   vox_trigger_level: 0.6
   
   # Pre-transmission silence (seconds)
   # Brief silence before audio to let VOX stabilize
+  # Helps prevent cutting off the start of morse code
   pre_audio_silence: 0.2
   
   # Post-transmission silence (seconds)
   # Silence after audio before ending (VOX hold time)
+  # Baofeng VOX delay adds additional hold time
   post_audio_silence: 0.5
 
 # Morse code settings

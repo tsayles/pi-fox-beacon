@@ -4,41 +4,68 @@
 
 This MVP simplifies the original PiTower Radio design by eliminating custom hardware and using readily-available components:
 
-- **Raspberry Pi** (any model with USB)
-- **USB Audio Dongle** (3.5mm stereo output)
+- **Raspberry Pi 3 Model B+** (quad-core 1.4GHz, built-in WiFi)
+- **UGREEN USB Audio Adapter** (24bit/96kHz DAC, TRRS)
+- **BTECH APRS-K1 Cable** (Kenwood K1 to 3.5mm TRRS audio interface)
 - **Baofeng UV-5RX3** in VOX mode (voice-activated transmission)
-- **3.5mm audio cable** (Pi USB dongle → Baofeng mic/speaker jack)
 
 No custom HATs, no PTT control circuit, no RF attenuator — just software-generated audio triggering the radio's built-in VOX.
+
+**📖 For complete hardware setup instructions, see [mvp-hardware-setup.md](mvp-hardware-setup.md)**
 
 ---
 
 ## Hardware Requirements
 
-### Components
+### Components (Actual Setup)
 
-| Component | Specification | Notes |
-|-----------|--------------|-------|
-| Raspberry Pi | Any model with USB port | Pi Zero W, Pi 3, Pi 4, etc. |
-| USB Audio Dongle | USB sound card with 3.5mm output | Generic USB audio adapter (~$5-10) |
-| Audio Cable | 3.5mm TRRS or TRS | Connects dongle to Baofeng K-port |
-| Baofeng Radio | UV-5RX3 or UV-5R | Must support VOX mode |
-| Power Supply | 5V USB power bank or wall adapter | For Raspberry Pi |
+| Component | Part Number / Model | Price | Status |
+|-----------|-------------------|-------|--------|
+| Raspberry Pi | Raspberry Pi 3 Model B+ | ~$40 | Ordered (SparkFun #430326) |
+| USB Audio Dongle | UGREEN USB to 3.5mm Jack Audio Adapter (24bit/96kHz, TRRS, 9.8") | ~$15 | Ordered (Amazon) |
+| Audio Cable | BTECH APRS-K1 Multi-Function Universal Audio Interface Cable | ~$25 | On hand |
+| Baofeng Radio | UV-5RX3 (10W tri-band) | — | On hand |
+| Power Supply | 5V/2.5A USB power supply or power bank | ~$10 | TBD |
 
-### Wiring
+**Total Hardware Cost:** ~$90 (excluding radio and power supply already on hand)
+
+### Alternative Cable Option
+
+Also available: [Digirig Baofeng Cables Set](https://digirig.net/product/baofeng-cables/) (~$35)
+- Higher quality shielded cables with ferrite chokes
+- Dual 3.5mm plugs (separate mic/speaker)
+- Can be used instead of APRS-K1 if preferred
+
+### Wiring Diagram
 
 ```
-Raspberry Pi USB Port
-    └── USB Audio Dongle
-            └── 3.5mm plug
-                    └── Baofeng K-port (mic/speaker connector)
+Raspberry Pi 3 B+
+    ↓ USB-A port
+UGREEN USB Audio Adapter (24bit/96kHz)
+    ↓ 3.5mm TRRS jack
+BTECH APRS-K1 Cable (3.5mm TRRS plug → Kenwood K1 connector)
+    ↓ Kenwood K1 plug (2-pin)
+Baofeng UV-5RX3 K-port
 ```
 
-The Baofeng K-port pinout (2.5mm/3.5mm TRRS):
-- **Tip:** Speaker output
-- **Ring 1:** Microphone input (audio from Pi goes here)
-- **Ring 2:** Ground
-- **Sleeve:** PTT (not used in VOX mode)
+**Signal Path:**
+- Pi generates audio in software (numpy sine waves)
+- Audio output via ALSA to USB audio device
+- UGREEN adapter converts USB digital audio to analog 3.5mm
+- APRS-K1 cable routes audio to Baofeng microphone input
+- Baofeng VOX detects audio and keys PTT automatically
+- No GPIO or hardware PTT control needed!
+
+### Kenwood K1 Connector Pinout
+
+The Baofeng K-port uses standard Kenwood K1 (2-pin):
+- **3.5mm jack:** Speaker output (from radio)
+- **2.5mm jack:** Microphone input + PTT
+  - Tip: Microphone (audio from Pi goes here)
+  - Sleeve: PTT (grounded to transmit, floating for receive)
+  - Ring: Ground
+
+**For VOX mode:** Only the microphone input is used. PTT pin is left floating.
 
 ---
 
@@ -125,53 +152,87 @@ Once proven, the full PiTower design adds:
 
 ## Development Roadmap
 
-### Phase 1: Basic Beacon (This PR)
-- [ ] USB audio device detection and configuration
-- [ ] Simple tone generator (1kHz test tone)
-- [ ] VOX trigger testing
-- [ ] Basic beacon loop (transmit every N minutes)
+### Phase 1: Basic Beacon ✅ (Implemented in this PR)
+- [x] USB audio device detection and configuration
+- [x] Simple tone generator (1kHz test tone)
+- [x] VOX trigger testing via test_audio.py
+- [x] Basic beacon loop (transmit every N minutes)
+- [x] Morse code generator (callsign identification)
+- [x] CW tone generation (600-800 Hz)
+- [x] WPM configuration
+- [ ] Hardware testing with actual Pi 3 B+ + UGREEN + BTECH APRS-K1
+- [ ] VOX calibration and tuning
 
-### Phase 2: Morse Code
-- [ ] Morse code generator (callsign identification)
-- [ ] CW tone generation (600-800 Hz)
-- [ ] WPM configuration
+### Phase 2: Field Testing (Next)
+- [ ] Bench test complete hardware stack
+- [ ] Verify VOX triggering reliability
+- [ ] Measure VOX latency and PTT hold time
+- [ ] Range testing (High vs Low power)
+- [ ] Signal quality reports from receivers
+- [ ] 24-hour continuous beacon test
+- [ ] Power consumption measurement
 
 ### Phase 3: Voice Messages
 - [ ] Text-to-speech integration (pyttsx3 or festival)
 - [ ] Voice message queue
-- [ ] Callsign announcement
+- [ ] Callsign announcement in voice
+- [ ] Mixed morse + voice announcements
 
 ### Phase 4: Remote Control
-- [ ] DTMF tone detection (if Pi has audio input)
 - [ ] Web interface for configuration
 - [ ] SSH-based remote control
+- [ ] Status monitoring/logging
+- [ ] Remote shutdown/restart
+- [ ] (Future: DTMF control if we add audio input)
 
 ---
 
 ## Testing Plan
 
-1. **Bench Testing:**
-   - Verify audio output from USB dongle
-   - Confirm VOX triggering at various audio levels
-   - Measure VOX latency and PTT hold time
+### 1. Bench Testing (With Hardware)
+- [ ] Verify UGREEN adapter detected by Pi (lsusb, aplay -l)
+- [ ] Run test_audio.py and verify tone output
+- [ ] Confirm Baofeng VOX triggers (PTT LED lights)
+- [ ] Test different VOX levels (1-10 on radio)
+- [ ] Test different vox_trigger_level values (0.3-0.8 in config)
+- [ ] Measure VOX latency (time from audio start to PTT)
+- [ ] Measure VOX hold time (time from audio stop to PTT release)
+- [ ] Verify morse code is readable (listen on second radio)
 
-2. **Field Testing:**
-   - Transmit range testing (High vs Low power)
-   - Battery runtime testing
-   - Signal quality reports from receivers
+### 2. Field Testing
+- [ ] Transmit range testing at HIGH power (10W)
+- [ ] Transmit range testing at LOW power (5W)
+- [ ] Signal quality reports from receivers
+- [ ] Battery runtime testing (Pi + Baofeng on power bank)
+- [ ] Outdoor deployment test (weatherproofing, mounting)
 
-3. **Integration Testing:**
-   - 24-hour continuous beacon operation
-   - Configuration change testing
-   - Error recovery (USB disconnect, power loss)
+### 3. Integration Testing
+- [ ] 24-hour continuous beacon operation
+- [ ] Configuration change testing (live reload)
+- [ ] Error recovery (USB disconnect, audio device reset)
+- [ ] Error recovery (power loss/restore)
+- [ ] Log analysis (missed beacons, timing accuracy)
+
+### 4. Fox Hunt Validation
+- [ ] Deploy as actual fox in practice hunt
+- [ ] Gather feedback from hunters on signal clarity
+- [ ] Validate beacon timing meets hunt requirements
+- [ ] Test portability (setup/teardown time)
 
 ---
+
+## Hardware Documentation
+
+See detailed hardware setup instructions:
+- **docs/mvp-hardware-setup.md** - Complete assembly and configuration guide
+- **docs/orders/** - Purchase receipts and part numbers
 
 ## Reference Links
 
 - [Baofeng UV-5R VOX Mode Guide](https://www.miklor.com/uv5r/)
 - [Raspberry Pi Audio Configuration](https://www.raspberrypi.org/documentation/usage/audio/)
-- [PyAudio Documentation](https://people.csail.mit.edu/hubert/pyaudio/)
+- [BTECH APRS-K1 Cable Documentation](https://baofengtech.com/product/aprs-k1/)
+- [UGREEN USB Audio Adapter](https://www.amazon.com/UGREEN-Adapter-Support-Headphone-Compatible/dp/B08Y8CZB2S)
 
 ---
 

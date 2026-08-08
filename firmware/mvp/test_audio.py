@@ -2,8 +2,18 @@
 """
 Audio device test utility for MVP beacon.
 
-Lists available audio output devices and plays a test tone
-to verify USB audio dongle configuration.
+Tests UGREEN USB audio adapter and verifies VOX triggering on Baofeng radio.
+
+Hardware Setup:
+- Raspberry Pi 3 B+ (or compatible)
+- UGREEN USB Audio Adapter (24bit/96kHz) plugged into USB port
+- BTECH APRS-K1 cable connecting adapter to Baofeng K-port
+- Baofeng UV-5RX3 configured for VOX mode
+
+This script:
+1. Lists all available audio output devices
+2. Plays a test tone through selected device
+3. Verifies that Baofeng VOX triggers (radio keys up)
 """
 
 import sounddevice as sd
@@ -102,16 +112,28 @@ def main():
     
     if success:
         print()
-        print("If you heard the tone and/or the radio keyed up,")
-        print("the audio device is working correctly.")
+        print("✓ Audio test successful!")
+        print()
+        print("If the Baofeng keyed up (PTT LED lit), VOX is working correctly.")
+        print("If not, check:")
+        print("  - BTECH APRS-K1 cable fully seated in both UGREEN and Baofeng K-port")
+        print("  - Baofeng VOX enabled (Menu → VOX → Level 5)")
+        print("  - Baofeng battery charged")
         print()
         print("Next steps:")
-        print("  1. Edit config.yaml and set device_index to the working device")
-        print("  2. Adjust vox_trigger_level if needed")
-        print("  3. Run beacon.py to start the beacon")
+        print("  1. Edit config.yaml and set your callsign (required!)")
+        print("  2. Set device_index if not using default device")
+        print("  3. Adjust vox_trigger_level if VOX sensitivity needs tuning")
+        print("  4. Run: python beacon.py")
     else:
         print()
-        print("Audio test failed. Try a different device or check connections.")
+        print("✗ Audio test failed.")
+        print()
+        print("Troubleshooting:")
+        print("  - Verify UGREEN adapter is plugged into Pi USB port")
+        print("  - Check that sounddevice is installed: pip install sounddevice")
+        print("  - Try a different USB port")
+        print("  - Run: aplay -l  (to list ALSA devices)")
     
     print()
 

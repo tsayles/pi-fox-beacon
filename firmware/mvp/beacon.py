@@ -4,6 +4,21 @@ Main beacon control script for MVP implementation.
 
 Controls beacon timing, message generation, and audio output
 for USB sound interface + VOX mode operation.
+
+Hardware Setup:
+- Raspberry Pi 3 B+ (or compatible)
+- UGREEN USB Audio Adapter (24bit/96kHz)
+- BTECH APRS-K1 cable (Kenwood K1 to 3.5mm TRRS)
+- Baofeng UV-5RX3 in VOX mode
+
+The beacon:
+1. Generates morse code or tone audio in software (numpy)
+2. Outputs audio via ALSA to USB audio device (UGREEN adapter)
+3. Audio travels through APRS-K1 cable to Baofeng microphone input
+4. Baofeng VOX detects audio and automatically keys PTT
+5. Beacon transmits on configured frequency
+
+No GPIO or hardware PTT control required!
 """
 
 import time
