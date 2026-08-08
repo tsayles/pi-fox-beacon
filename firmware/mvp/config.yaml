@@ -23,12 +23,19 @@ audio:
   # Adjust based on radio's VOX sensitivity
   # Start with 0.6 and Baofeng VOX level 5, then tune as needed
   # Too high = false triggers, too low = unreliable keying
+  # NOTE: Audio amplitude does NOT affect FM carrier power, only deviation
   vox_trigger_level: 0.6
   
+  # VOX preamble (seconds)
+  # Tone played BEFORE message to allow VOX to stabilize and PTT to engage
+  # Prevents clipping of first morse code element
+  # 0.3 seconds recommended for Baofeng VOX (adjust based on testing)
+  vox_preamble: 0.3
+  
   # Pre-transmission silence (seconds)
-  # Brief silence before audio to let VOX stabilize
-  # Helps prevent cutting off the start of morse code
-  pre_audio_silence: 0.2
+  # Brief silence before audio (after preamble finishes)
+  # Not needed for VOX triggering, but can help with audio cleanup
+  pre_audio_silence: 0.0
   
   # Post-transmission silence (seconds)
   # Silence after audio before ending (VOX hold time)

@@ -118,6 +118,20 @@ class BeaconController:
             self.logger.error(f"Unknown message type: {msg_type}")
             return None
         
+        # Add VOX preamble tone to allow PTT to engage before message
+        # This prevents clipping the first morse code element
+        vox_preamble_duration = self.config['audio'].get('vox_preamble', 0.3)
+        if vox_preamble_duration > 0:
+            # Use same frequency as morse code for preamble
+            preamble_freq = self.config['morse']['frequency']
+            preamble = self.audio_gen.generate_tone(
+                preamble_freq,
+                vox_preamble_duration,
+                fade_ms=5  # Short fade to avoid key click
+            )
+        else:
+            preamble = self.audio_gen.generate_silence(0)
+        
         # Add pre/post silence for VOX timing
         pre_silence = self.audio_gen.generate_silence(
             self.config['audio']['pre_audio_silence']
@@ -126,7 +140,7 @@ class BeaconController:
             self.config['audio']['post_audio_silence']
         )
         
-        return self.audio_gen.concatenate_audio(pre_silence, audio, post_silence)
+        return self.audio_gen.concatenate_audio(preamble, pre_silence, audio, post_silence)
     
     def generate_id_audio(self):
         """
@@ -146,6 +160,18 @@ class BeaconController:
             amplitude=self.config['audio']['vox_trigger_level']
         )
         
+        # Add VOX preamble for station ID too
+        vox_preamble_duration = self.config['audio'].get('vox_preamble', 0.3)
+        if vox_preamble_duration > 0:
+            preamble_freq = self.config['morse']['frequency']
+            preamble = self.audio_gen.generate_tone(
+                preamble_freq,
+                vox_preamble_duration,
+                fade_ms=5
+            )
+        else:
+            preamble = self.audio_gen.generate_silence(0)
+        
         # Add pre/post silence
         pre_silence = self.audio_gen.generate_silence(
             self.config['audio']['pre_audio_silence']
@@ -154,7 +180,7 @@ class BeaconController:
             self.config['audio']['post_audio_silence']
         )
         
-        return self.audio_gen.concatenate_audio(pre_silence, audio, post_silence)
+        return self.audio_gen.concatenate_audio(preamble, pre_silence, audio, post_silence)
     
     def needs_identification(self):
         """
