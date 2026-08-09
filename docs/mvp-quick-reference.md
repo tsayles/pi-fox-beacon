@@ -8,7 +8,8 @@ Quick reference for operating the Pi Fox Beacon MVP.
 
 ```
 ┌─────────────────────────────────┐
-│   Baofeng UV-5RX3 (10W HT)      │  ← Radio in VOX mode
+│   Baofeng UV-5RX3 (5W HT)       │  ← Radio in VOX mode
+│   ASIN: B01J2W4JUI              │     Tri-band VHF/1.25m/UHF
 └────────────┬────────────────────┘
              │ K1 connector (2-pin Kenwood)
 ┌────────────┴────────────────────┐
@@ -38,7 +39,7 @@ Quick reference for operating the Pi Fox Beacon MVP.
 
 ### Baofeng Configuration
 - [ ] Frequency set (e.g., 146.565 MHz for fox hunting)
-- [ ] Power level: HIGH (10W) or LOW (5W)
+- [ ] Power level: HIGH (5W) or LOW (1W)
 - [ ] VOX enabled: Level 5 (Menu → VOX)
 - [ ] VOX delay: 1.0 seconds
 - [ ] CTCSS/DCS: OFF (unless required)
@@ -213,7 +214,7 @@ git status
 - Follow power limits for license class
 
 ⚠️ **RF Safety:**
-- Baofeng UV-5RX3: 10W output
+- Baofeng UV-5RX3: 5W maximum output (HIGH), 1W (LOW)
 - Maintain safe distance from antenna during transmission
 - Do not transmit with antenna touching body
 - Follow FCC RF exposure guidelines
@@ -230,7 +231,9 @@ git status
 
 | Metric | Value |
 |--------|-------|
+| Radio output power | 5W (HIGH) / 1W (LOW) |
 | Beacon TX latency | ~100-500ms (VOX dependent) |
+| VOX preamble | 300ms (configurable) |
 | Audio sample rate | 48 kHz (24bit DAC) |
 | Morse code WPM | 15-25 (configurable) |
 | CW tone frequency | 600-800 Hz (configurable) |

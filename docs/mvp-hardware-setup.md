@@ -11,7 +11,9 @@ Quick reference for assembling and configuring the MVP beacon hardware.
 | Raspberry Pi 3 Model B+ | — | SparkFun | 2026-08-08 | Order #430326 |
 | UGREEN USB Audio Adapter | 24bit/96kHz TRRS | Amazon | 2026-08-08 | Ordered |
 | BTECH APRS-K1 Cable | Universal Audio Interface | Amazon | (previous) | On hand |
-| Baofeng UV-5RX3 | 10W tri-band HT | — | — | On hand |
+| Baofeng UV-5RX3 | 5W tri-band HT (ASIN B01J2W4JUI) | Amazon | — | On hand |
+
+**Radio Specs:** VHF/1.25m/UHF tri-band, 5W max power, VOX capable, 1800mAh battery
 
 **Optional backup:** Digirig Baofeng Cables Set (on hand)
 
@@ -71,7 +73,7 @@ Quick reference for assembling and configuring the MVP beacon hardware.
 
 4. **Set Baofeng frequency and power:**
    - Set to desired beacon frequency
-   - Set power: HIGH (10W) or LOW (5W)
+   - Set power: HIGH (5W) or LOW (1W)
    - Disable CTCSS/DCS unless required
 
 ### Step 4: Test Audio Output

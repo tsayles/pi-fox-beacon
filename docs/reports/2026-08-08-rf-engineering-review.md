@@ -3,13 +3,16 @@
 **Reviewer:** Rufus RF Engineer (tsayles/homelab)  
 **Date:** 2026-08-08  
 **Project:** Pi Fox Beacon MVP - USB Audio + VOX Mode  
-**Branch:** mvp-usb-sound-vox
+**Branch:** mvp-usb-sound-vox  
+**Radio:** Baofeng UV-5RX3 (5W max, ASIN B01J2W4JUI)
 
 ---
 
 ## Review Summary
 
 Overall MVP approach is sound, but several RF considerations need attention for reliable operation and regulatory compliance.
+
+**Note:** Baofeng UV-5RX3 is rated at **5 Watts maximum** (HIGH), not 10W. LOW power is approximately 1W.
 
 ---
 
@@ -102,11 +105,11 @@ def add_vox_preamble(morse_audio, preamble_ms=300):
 **Topology:**
 - **π or T pads** with relay/FET switching
 - Target **1-2 dB steps** over **40-60 dB** total range
-- Watch **resistor power dissipation** (especially at 10W input)
+- Watch **resistor power dissipation** (at 5W input from UV-5RX3)
 - Proper **shielding** to avoid RF leakage
 
 **Design notes:**
-- Relay-based preferred for 10W power levels
+- Relay-based preferred for 5W power levels
 - SMA connectors board-edge mount
 - Consider binary-weighted stages (3/6/12/24 dB)
 - Existing power dissipation analysis in docs is good foundation
@@ -180,8 +183,8 @@ def add_vox_preamble(morse_audio, preamble_ms=300):
 
 ### Field Tests:
 1. **Range Testing:**
-   - [ ] Transmit at HIGH (10W) - measure range
-   - [ ] Transmit at LOW (5W) - measure range
+   - [ ] Transmit at HIGH (5W) - measure range
+   - [ ] Transmit at LOW (1W) - measure range
    - [ ] Collect S-meter readings at various distances
    - [ ] Verify signal is usable for direction finding
 
@@ -203,8 +206,8 @@ def add_vox_preamble(morse_audio, preamble_ms=300):
 2. **RF Attenuator:**
    - 50Ω switched T-pad or π-pad network
    - 1-2 dB steps, 40-60 dB total range
-   - High-power resistors (2W+ at high attenuation)
-   - Coaxial relays rated for 10W+
+   - High-power resistors (1-2W at high attenuation for 5W input)
+   - Coaxial relays rated for 5W+
    - Proper shielding and SMA connectors
 
 3. **Audio Quality:**
