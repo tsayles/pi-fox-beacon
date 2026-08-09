@@ -2,9 +2,10 @@
 
 **Reviewer:** Rufus RF Engineer (tsayles/homelab)  
 **Date:** 2026-08-08  
+**Updated:** 2026-08-09 (radio changed to K5PLUS)  
 **Project:** Pi Fox Beacon MVP - USB Audio + VOX Mode  
 **Branch:** mvp-usb-sound-vox  
-**Radio:** Baofeng UV-5RX3 (5W max, ASIN B01J2W4JUI)
+**Radio:** Baofeng K5PLUS (10W max, ASIN B0GTDDRGY7)
 
 ---
 
@@ -12,7 +13,13 @@
 
 Overall MVP approach is sound, but several RF considerations need attention for reliable operation and regulatory compliance.
 
-**Note:** Baofeng UV-5RX3 is rated at **5 Watts maximum** (HIGH), not 10W. LOW power is approximately 1W.
+**Radio Specifications:**
+- **Model:** Baofeng K5PLUS (tri-band, tri-power)
+- **Power:** 10W (HIGH), 7W (MID), 4W (LOW)
+- **Bands:** VHF (136-174 MHz), 1.25m (220-260 MHz), UHF (400-480 MHz)
+- **Battery:** 2500mAh Li-ion, USB-C + desktop charging
+- **Channels:** 999 memory channels
+- **Features:** VOX, voice scramble, color LCD, NOAA weather
 
 ---
 
@@ -105,11 +112,11 @@ def add_vox_preamble(morse_audio, preamble_ms=300):
 **Topology:**
 - **π or T pads** with relay/FET switching
 - Target **1-2 dB steps** over **40-60 dB** total range
-- Watch **resistor power dissipation** (at 5W input from UV-5RX3)
+- Watch **resistor power dissipation** (at 10W input from K5PLUS)
 - Proper **shielding** to avoid RF leakage
 
 **Design notes:**
-- Relay-based preferred for 5W power levels
+- Relay-based preferred for 10W power levels
 - SMA connectors board-edge mount
 - Consider binary-weighted stages (3/6/12/24 dB)
 - Existing power dissipation analysis in docs is good foundation
@@ -183,8 +190,9 @@ def add_vox_preamble(morse_audio, preamble_ms=300):
 
 ### Field Tests:
 1. **Range Testing:**
-   - [ ] Transmit at HIGH (5W) - measure range
-   - [ ] Transmit at LOW (1W) - measure range
+   - [ ] Transmit at HIGH (10W) - measure range
+   - [ ] Transmit at MID (7W) - measure range
+   - [ ] Transmit at LOW (4W) - measure range
    - [ ] Collect S-meter readings at various distances
    - [ ] Verify signal is usable for direction finding
 
@@ -206,8 +214,8 @@ def add_vox_preamble(morse_audio, preamble_ms=300):
 2. **RF Attenuator:**
    - 50Ω switched T-pad or π-pad network
    - 1-2 dB steps, 40-60 dB total range
-   - High-power resistors (1-2W at high attenuation for 5W input)
-   - Coaxial relays rated for 5W+
+   - High-power resistors (2W+ at high attenuation for 10W input)
+   - Coaxial relays rated for 10W+
    - Proper shielding and SMA connectors
 
 3. **Audio Quality:**

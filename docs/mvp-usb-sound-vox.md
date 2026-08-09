@@ -24,16 +24,17 @@ No custom HATs, no PTT control circuit, no RF attenuator — just software-gener
 | Raspberry Pi | Raspberry Pi 3 Model B+ | ~$40 | Ordered (SparkFun #430326) |
 | USB Audio Dongle | UGREEN USB to 3.5mm Jack Audio Adapter (24bit/96kHz, TRRS, 9.8") | ~$15 | Ordered (Amazon) |
 | Audio Cable | BTECH APRS-K1 Multi-Function Universal Audio Interface Cable | ~$25 | On hand |
-| Baofeng Radio | UV-5RX3 (5W tri-band, ASIN B01J2W4JUI) | ~$30 | On hand |
+| Baofeng Radio | K5PLUS (10W tri-band, ASIN B0GTDDRGY7) | ~$40 | On hand |
 | Power Supply | 5V/2.5A USB power supply or power bank | ~$10 | TBD |
 
-**Radio Specifications (UV-5RX3):**
-- **Frequency:** 136-174 MHz (VHF), 222-225 MHz (1.25m), 400-520 MHz (UHF)
-- **Power:** 5 Watts maximum output
-- **Channels:** 128 memory channels
-- **Features:** VOX, CTCSS/DCS, dual watch, DTMF, LED flashlight
-- **Battery:** 1800mAh Li-ion (BL-5)
-- **Antennas:** Includes dual-band (VHF/UHF) and 220MHz single-band antennas
+**Radio Specifications (K5PLUS):**
+- **Frequency:** 136-174 MHz (VHF), 220-260 MHz (1.25m), 400-480 MHz (UHF)
+- **Power:** Tri-power: 10W (HIGH), 7W (MID), 4W (LOW)
+- **Channels:** 999 memory channels
+- **Features:** VOX, CTCSS/DCS, voice scramble, frequency copy, NOAA weather
+- **Battery:** 2500mAh Li-ion (USB-C + desktop charging)
+- **Display:** 1.77" color LCD
+- **Antenna:** SMA-F detachable
 
 **Total Hardware Cost:** ~$90 (excluding radio and power supply already on hand)
 
@@ -75,6 +76,8 @@ The Baofeng K-port uses standard Kenwood K1 (2-pin):
 
 **For VOX mode:** Only the microphone input is used. PTT pin is left floating.
 
+**Note:** K5PLUS uses same K1 connector as UV-5R series, so BTECH APRS-K1 cable is compatible.
+
 ---
 
 ## Software Architecture
@@ -113,7 +116,7 @@ The Baofeng must be configured for VOX operation:
    - VOX level: Start with level 3-5 (adjust based on testing)
    - VOX delay: 0.5-1.0 seconds (delay after audio stops before PTT release)
    - Frequency: Set to desired beacon frequency
-   - Power: High (5W) or Low (1W) as needed
+   - Power: High (10W), Mid (7W), or Low (4W) as needed
 
 2. **Audio Level Calibration:**
    - Too loud: VOX triggers on background noise
@@ -134,13 +137,13 @@ The Baofeng must be configured for VOX operation:
 
 ## Limitations vs. Full PiTower Design
 
-❌ **No RF power stepping** — MVP uses fixed radio power level (HIGH=5W or LOW=1W)  
+❌ **No RF power stepping** — MVP uses fixed radio power level (HIGH=10W, MID=7W, or LOW=4W)  
 ❌ **VOX latency** — ~100-500ms delay before transmission starts  
 ❌ **Less precise PTT control** — VOX may hold PTT longer than needed  
 ❌ **Audio quality dependent** — VOX sensitivity varies with tone/voice characteristics  
 ❌ **No hardware PTT** — can't do instant-on transmissions  
 
-**Note:** Audio amplitude does NOT affect FM carrier power. The radio transmits at full power (5W high / 1W low) regardless of audio level. Audio level only affects VOX triggering reliability, not transmitted signal strength or S-meter readings on receivers.
+**Note:** Audio amplitude does NOT affect FM carrier power. The radio transmits at full selected power (10W/7W/4W) regardless of audio level. Audio level only affects VOX triggering reliability, not transmitted signal strength or S-meter readings on receivers.
 
 ---
 
