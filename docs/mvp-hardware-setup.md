@@ -1,6 +1,6 @@
 # MVP Hardware Setup Guide
 
-Quick reference for assembling and configuring the MVP beacon hardware.
+Quick reference for assembling and configuring the MVP beacon hardware using the NA6D AIOC adapter.
 
 ---
 
@@ -9,13 +9,12 @@ Quick reference for assembling and configuring the MVP beacon hardware.
 | Item | Part Number | Vendor | Order Date | Status |
 |------|------------|--------|------------|--------|
 | Raspberry Pi 3 Model B+ | — | SparkFun | 2026-08-08 | Order #430326 |
-| UGREEN USB Audio Adapter | 24bit/96kHz TRRS | Amazon | 2026-08-08 | Ordered |
-| BTECH APRS-K1 Cable | Universal Audio Interface | Amazon | (previous) | On hand |
+| NA6D AIOC Adapter | All-In-One Cable (USB-C, Kenwood K1) | na6d.com | TBD | To order |
 | Baofeng K5PLUS | 10W tri-band HT (ASIN B0GTDDRGY7) | Amazon | — | On hand |
 
-**Radio Specs:** VHF/1.25m/UHF tri-band, tri-power (10W/7W/4W), VOX capable, 2500mAh battery, 999 channels
+**AIOC:** Single USB-C device providing USB sound card + hardware PTT + radio programming. Replaces the separate USB audio dongle and BTECH APRS-K1 cable used in the original VOX-only approach.
 
-**Optional backup:** Digirig Baofeng Cables Set (on hand)
+**Radio Specs:** VHF/1.25m/UHF tri-band, tri-power (10W/7W/4W), 2500mAh battery, 999 channels. Uses Kenwood K1 (2-pin) connector — compatible with AIOC.
 
 ---
 
@@ -38,7 +37,6 @@ Quick reference for assembling and configuring the MVP beacon hardware.
    ```bash
    git clone https://github.com/tsayles/pi-fox-beacon.git
    cd pi-fox-beacon
-   git checkout mvp-usb-sound-vox
    ```
 
 2. Install Python dependencies:
@@ -46,62 +44,67 @@ Quick reference for assembling and configuring the MVP beacon hardware.
    cd firmware/mvp
    pip install -r requirements.txt
    ```
+   *(includes pyserial for AIOC PTT control)*
 
 3. Copy and edit configuration:
    ```bash
    cp config.yaml my-config.yaml
    nano my-config.yaml
-   # Set your callsign, beacon interval, etc.
+   # Set your callsign, AIOC serial port, beacon interval, etc.
    ```
 
 ### Step 3: Connect Hardware
 
-1. **Plug UGREEN USB adapter into Pi USB port**
-   - Any of the 4 USB-A ports will work
-   - Pi should auto-detect as USB audio device
+1. **Plug AIOC into Pi USB port**
+   - Use a good quality USB-C data cable (not charge-only)
+   - Pi should detect two new devices: USB sound card + serial port
 
-2. **Connect BTECH APRS-K1 cable:**
-   - 3.5mm TRRS plug → UGREEN adapter 3.5mm jack
-   - Kenwood K1 connector → Baofeng K-port (side of radio)
+2. **Connect AIOC to radio:**
+   - Plug the AIOC's Kenwood K1 connector into the radio's K-port (side of radio)
 
-3. **Configure Baofeng for VOX:**
-   - Press MENU
-   - Enter `4` (VOX) or navigate to VOX setting
-   - Set VOX level: Start with `5` (range 1-10)
-   - Set VOX delay: `1.0s` recommended
-   - Press MENU to save and exit
+3. **Verify AIOC is detected:**
+   ```bash
+   lsusb | grep -i aioc   # or look for STM32 device
+   aplay -l               # should show AIOC as a sound card
+   ls /dev/ttyACM*        # should show /dev/ttyACM0 (or similar)
+   ```
 
-4. **Set Baofeng frequency and power:**
+4. **Grant serial port access:**
+   ```bash
+   sudo usermod -aG dialout $USER
+   # Log out and back in (or run: newgrp dialout)
+   ```
+
+5. **Set radio frequency and power:**
    - Set to desired beacon frequency
    - Set power: HIGH (10W), MID (7W), or LOW (4W)
    - Disable CTCSS/DCS unless required
+   - VOX does NOT need to be enabled when using AIOC hardware PTT
 
-### Step 4: Test Audio Output
+### Step 4: Test Audio and PTT
 
-1. List audio devices:
+1. Run the test utility:
    ```bash
    python test_audio.py
    ```
 
-2. Select the UGREEN device (usually shows as "USB Audio Device")
+2. Select the AIOC audio device when prompted
 
-3. Play test tone - radio should key up when tone plays
+3. Enter the AIOC serial port for PTT test (e.g. `/dev/ttyACM0`)
+   - Radio TX LED should light up during PTT test
+   - You should hear the test tone from a nearby receiver
 
-4. If VOX doesn't trigger:
-   - Increase `vox_trigger_level` in config.yaml
-   - Increase VOX sensitivity on radio (higher number)
-   - Check cable connections
-
-5. If VOX triggers on silence:
-   - Decrease VOX sensitivity on radio (lower number)
-   - Reduce `vox_trigger_level` in config.yaml
+4. If PTT doesn't work:
+   - Check `ls /dev/ttyACM*` to confirm port name
+   - Verify dialout group membership: `groups $USER`
+   - Try `sudo python test_audio.py` as a temporary workaround
 
 ### Step 5: Run Beacon
 
 1. Edit `config.yaml`:
    - Set your callsign (required for legal operation)
+   - Set `ptt.port` to your AIOC serial port
    - Set beacon interval (60 seconds recommended for testing)
-   - Configure morse code message
 
 2. Run beacon:
    ```bash
@@ -116,63 +119,82 @@ Quick reference for assembling and configuring the MVP beacon hardware.
 
 ### Audio Levels
 
-The UGREEN adapter output level is fixed, so adjust VOX trigger via:
-- **config.yaml:** `vox_trigger_level` (0.0 to 1.0)
-- **Radio:** VOX sensitivity (1-10, higher = more sensitive)
+With hardware PTT, audio level affects FM deviation (audio quality), not PTT reliability:
+- **config.yaml:** `audio.amplitude` (0.0 to 1.0)
+- Start with `0.7` — adjust down if audio sounds over-deviated
 
-Start conservative:
-- `vox_trigger_level: 0.5`
-- Radio VOX: `5`
+### PTT Timing
 
-Then adjust up if needed.
+```yaml
+ptt:
+  ptt_on_delay: 0.05   # Time after PTT before audio (radio TX settle)
+  ptt_off_delay: 0.05  # Time after audio before PTT release
+```
+
+Increase `ptt_on_delay` slightly (e.g. 0.1s) if the first morse element is clipped.
 
 ### Morse Code Timing
 
 For readable morse code:
-- **WPM:** 15-20 recommended (faster = more spectrum efficient)
+- **WPM:** 15-20 recommended
 - **Tone frequency:** 600-800 Hz (standard CW tones)
-- **Character spacing:** Use default Farnsworth timing
 
 ### Beacon Intervals
 
-**For testing:**
-- 30-60 seconds (rapid testing)
-
-**For actual fox hunt:**
-- 60-120 seconds (gives hunters time to take bearings)
-
-**FCC Identification:**
-- Every 10 minutes (automatic in beacon.py)
-- Required for legal operation in USA
+**For testing:** 30-60 seconds  
+**For actual fox hunt:** 60-120 seconds  
+**FCC Identification:** Every 10 minutes (automatic in beacon.py)
 
 ---
 
 ## Troubleshooting
 
-### Audio device not found
+### AIOC not detected
+
 ```bash
-# List all ALSA devices
+# List USB devices
+lsusb
+
+# List ALSA sound cards
 aplay -l
 
+# Check for serial port
+ls /dev/ttyACM* /dev/ttyUSB*
+```
+
+If not showing up, try a different USB cable (must be data cable, not charge-only).
+
+### Permission denied on serial port
+
+```bash
+sudo usermod -aG dialout $USER
+# Then log out and back in
+```
+
+### Audio device not found
+
+```bash
 # Test USB audio with speaker-test
 speaker-test -D plughw:1,0 -c 2 -t sine
 ```
 
-### VOX not reliable
-- Check cable firmly seated in K-port
-- Verify APRS-K1 TRRS plug fully inserted in UGREEN jack
-- Try different VOX level on radio
-- Ensure radio battery is charged (weak battery = unreliable VOX)
+### PTT asserts but no audio / audio but no PTT
+
+- Run `test_audio.py` to test each function separately
+- Check AIOC serial port name: `ls /dev/ttyACM*`
+- Verify `ptt.port` in config.yaml matches
 
 ### Morse code sounds garbled
+
 - Reduce WPM (slower = clearer)
 - Check tone frequency (600-800 Hz optimal)
-- Verify audio isn't clipping (reduce vox_trigger_level)
+- Verify audio isn't clipping (reduce `audio.amplitude`)
 
 ### Radio keys but no audio
-- Check audio routing: `sudo alsamixer`, select USB device
-- Unmute and set volume to 70-80%
-- Verify cable polarity (APRS-K1 may have orientation)
+
+```bash
+sudo alsamixer   # Select AIOC device, unmute and set volume to 70-80%
+```
 
 ---
 
@@ -220,7 +242,7 @@ To auto-start beacon on boot:
 
 Once basic beacon is working:
 - Field test transmission range
-- Experiment with different VOX levels
+- Experiment with different PTT timing values
 - Add custom messages
 - Test with actual fox hunt scenario
 - Consider power bank for portable operation

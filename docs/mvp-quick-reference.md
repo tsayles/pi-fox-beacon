@@ -1,6 +1,6 @@
 # MVP Quick Reference Card
 
-Quick reference for operating the Pi Fox Beacon MVP.
+Quick reference for operating the Pi Fox Beacon MVP with the NA6D AIOC adapter.
 
 ---
 
@@ -8,20 +8,16 @@ Quick reference for operating the Pi Fox Beacon MVP.
 
 ```
 ┌─────────────────────────────────┐
-│   Baofeng K5PLUS (10W HT)       │  ← Radio in VOX mode
+│   Baofeng K5PLUS (10W HT)       │  ← Radio (no VOX needed)
 │   ASIN: B0GTDDRGY7              │     Tri-band VHF/1.25m/UHF
 │   Tri-power: 10W/7W/4W          │     2500mAh, 999 channels
 └────────────┬────────────────────┘
-             │ K1 connector (2-pin Kenwood)
+             │ K1 connector (2-pin Kenwood, built into AIOC cable)
 ┌────────────┴────────────────────┐
-│   BTECH APRS-K1 Cable           │  ← Audio interface cable
+│   NA6D AIOC Adapter             │  ← USB sound card + hardware PTT
+│   (USB-C, open source, STM32)   │     Single cable, no drivers needed
 └────────────┬────────────────────┘
-             │ 3.5mm TRRS plug
-┌────────────┴────────────────────┐
-│   UGREEN USB Audio Adapter      │  ← 24bit/96kHz DAC
-│   (9.8" cable, nylon braided)   │
-└────────────┬────────────────────┘
-             │ USB-A connector
+             │ USB-C → USB-A cable
 ┌────────────┴────────────────────┐
 │   Raspberry Pi 3 Model B+       │  ← Control computer
 │   (1.4GHz quad-core, WiFi)      │
@@ -33,25 +29,25 @@ Quick reference for operating the Pi Fox Beacon MVP.
 ## Quick Start Checklist
 
 ### Hardware Setup
-- [ ] UGREEN adapter plugged into Pi USB port
-- [ ] BTECH APRS-K1 cable: TRRS → UGREEN, K1 → Baofeng
-- [ ] Baofeng battery charged
+- [ ] AIOC plugged into Pi USB port (use data cable, not charge-only)
+- [ ] AIOC Kenwood K1 connector plugged into radio K-port
+- [ ] Radio battery charged
 - [ ] Pi powered via 5V/2.5A supply
 
-### Baofeng Configuration
+### Radio Configuration
 - [ ] Frequency set (e.g., 146.565 MHz for fox hunting)
 - [ ] Power level: HIGH (10W), MID (7W), or LOW (4W)
-- [ ] VOX enabled: Level 5 (Menu → VOX)
-- [ ] VOX delay: 1.0 seconds
 - [ ] CTCSS/DCS: OFF (unless required)
+- [ ] VOX: OFF (hardware PTT used instead)
 
 ### Software Setup
 - [ ] Pi OS updated: `sudo apt update && sudo apt upgrade`
 - [ ] Repository cloned: `git clone https://github.com/tsayles/pi-fox-beacon.git`
-- [ ] Branch checked out: `git checkout mvp-usb-sound-vox`
 - [ ] Dependencies installed: `pip install -r firmware/mvp/requirements.txt`
-- [ ] Audio tested: `python firmware/mvp/test_audio.py`
-- [ ] Config edited: Set callsign in `firmware/mvp/config.yaml`
+- [ ] Dialout group: `sudo usermod -aG dialout $USER` (then log out/in)
+- [ ] AIOC serial port confirmed: `ls /dev/ttyACM*`
+- [ ] Audio and PTT tested: `python firmware/mvp/test_audio.py`
+- [ ] Config edited: Set callsign and `ptt.port` in `firmware/mvp/config.yaml`
 
 ### Run Beacon
 ```bash
@@ -73,14 +69,20 @@ callsign: "K7LED"  # ← CHANGE THIS to your callsign (K7LED is M&K Club Call)
 beacon_interval_seconds: 60  # Time between transmissions
 identification_interval_seconds: 600  # CW ID every 10 min (FCC)
 
+ptt:
+  enabled: true
+  port: "/dev/ttyACM0"   # ← AIOC serial port (check: ls /dev/ttyACM*)
+  ptt_on_delay: 0.05     # Seconds after PTT before audio
+  ptt_off_delay: 0.05    # Seconds after audio before PTT release
+
 audio:
-  device_index: null  # Auto-detect UGREEN adapter
-  sample_rate: 48000  # Standard for UGREEN (supports up to 96kHz)
-  vox_trigger_level: 0.6  # 0.0-1.0, tune with radio VOX level
-  
+  device_index: null  # Auto-detect AIOC sound card
+  sample_rate: 48000
+  amplitude: 0.7      # Audio level (affects deviation, not TX power)
+
 morse:
-  wpm: 20  # Words per minute (15-25 recommended)
-  frequency: 700  # CW tone in Hz (600-800 standard)
+  wpm: 20        # Words per minute (15-25 recommended)
+  frequency: 700 # CW tone in Hz (600-800 standard)
 
 message:
   type: "morse"  # or "tone"
@@ -89,17 +91,13 @@ message:
 
 ---
 
-## Tuning VOX Sensitivity
+## PTT Timing Tuning
 
-VOX too sensitive (false triggers):
-- **Radio:** Decrease VOX level (try 3-4)
-- **Config:** Decrease `vox_trigger_level` (try 0.4-0.5)
+First morse element clipped:
+- Increase `ptt_on_delay` (try 0.1s)
 
-VOX not sensitive enough (doesn't key):
-- **Radio:** Increase VOX level (try 6-7)
-- **Config:** Increase `vox_trigger_level` (try 0.7-0.8)
-
-**Goal:** Clean trigger on beacon, no false triggers on silence.
+PTT held too long after audio:
+- Decrease `ptt_off_delay` (try 0.02s)
 
 ---
 
@@ -115,36 +113,41 @@ aplay -l
 ```
 
 ### "Radio doesn't key up"
-1. Check BTECH cable seated in both UGREEN and Baofeng K-port
-2. Verify Baofeng VOX is ON (Menu → VOX → Level 5)
-3. Check Baofeng battery charge
-4. Increase vox_trigger_level in config.yaml
-5. Increase VOX level on radio
+1. Check AIOC serial port: `ls /dev/ttyACM*`
+2. Verify dialout group: `groups $USER`
+3. Update `ptt.port` in config.yaml
+
+### "Permission denied on /dev/ttyACM0"
+```bash
+sudo usermod -aG dialout $USER
+# Then log out and back in
+```
 
 ### "Morse code sounds garbled"
 1. Reduce WPM (try 15)
 2. Check tone frequency (700 Hz standard)
-3. Reduce vox_trigger_level if clipping
+3. Reduce `audio.amplitude` if clipping
 
 ### "Permission denied" on audio device
 ```bash
-# Add user to audio group
 sudo usermod -a -G audio $USER
-
-# Log out and back in for group change to take effect
+# Log out and back in
 ```
 
 ---
 
 ## Common Commands
 
-### Audio Device Info
+### AIOC Device Info
 ```bash
-# List USB devices (verify UGREEN present)
+# List USB devices (verify AIOC present)
 lsusb
 
 # List ALSA audio devices
 aplay -l
+
+# Check AIOC serial port
+ls /dev/ttyACM*
 
 # Test speaker output
 speaker-test -D plughw:1,0 -c 2 -t sine -f 700
@@ -169,7 +172,7 @@ sudo journalctl -u fox-beacon -f
 ### Git Commands
 ```bash
 # Update to latest code
-git pull origin mvp-usb-sound-vox
+git pull
 
 # View current branch
 git branch
@@ -233,9 +236,8 @@ git status
 | Metric | Value |
 |--------|-------|
 | Radio output power | 10W (HIGH) / 7W (MID) / 4W (LOW) |
-| Beacon TX latency | ~100-500ms (VOX dependent) |
-| VOX preamble | 300ms (configurable) |
-| Audio sample rate | 48 kHz (24bit DAC) |
+| PTT latency | ~50ms (hardware DTR) |
+| Audio sample rate | 48 kHz |
 | Morse code WPM | 15-25 (configurable) |
 | CW tone frequency | 600-800 Hz (configurable) |
 | Station ID interval | 10 minutes (FCC compliant) |
@@ -249,10 +251,10 @@ git status
 - **Hardware Setup:** `docs/mvp-hardware-setup.md`
 - **Full Documentation:** `docs/mvp-usb-sound-vox.md`
 - **Source Code:** `firmware/mvp/`
+- **AIOC Project:** https://github.com/skuep/AIOC
 - **GitHub Issues:** https://github.com/tsayles/pi-fox-beacon/issues
-- **Pull Request:** https://github.com/tsayles/pi-fox-beacon/pull/3
 
 ---
 
-**Version:** MVP v0.1  
-**Last Updated:** 2026-08-08
+**Version:** MVP v0.2 (AIOC)  
+**Last Updated:** 2026-08-29

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Audio device test utility for MVP beacon.
+Audio device and PTT test utility for MVP beacon.
 
-Tests UGREEN USB audio adapter and verifies VOX triggering on Baofeng radio.
+Tests the NA6D AIOC adapter: USB audio output and hardware PTT via serial DTR.
 
 Hardware Setup:
-- Raspberry Pi 3 B+ (or compatible)
-- UGREEN USB Audio Adapter (24bit/96kHz) plugged into USB port
-- BTECH APRS-K1 cable connecting adapter to Baofeng K-port
-- Baofeng UV-5RX3 configured for VOX mode
+- Raspberry Pi (any model with USB)
+- NA6D AIOC adapter plugged into USB port
+- Radio connected to AIOC via Kenwood K1 cable
 
 This script:
 1. Lists all available audio output devices
-2. Plays a test tone through selected device
-3. Verifies that Baofeng VOX triggers (radio keys up)
+2. Lists available serial ports (for AIOC PTT)
+3. Plays a test tone through selected audio device
+4. Optionally tests hardware PTT via AIOC serial port DTR
 """
 
 import sounddevice as sd
@@ -35,7 +35,20 @@ def list_devices():
             print()
 
 
-def play_test_tone(device_index=None, duration=2.0, frequency=1000):
+def list_serial_ports():
+    """List available serial ports (potential AIOC ports)."""
+    import glob
+    print("\n=== Available Serial Ports (AIOC candidates) ===\n")
+    ports = sorted(glob.glob('/dev/ttyACM*') + glob.glob('/dev/ttyUSB*'))
+    if ports:
+        for p in ports:
+            print(f"  {p}")
+    else:
+        print("  (none found)")
+    print()
+
+
+def play_test_tone(device_index=None, duration=2.0, frequency=700):
     """
     Play a test tone to verify audio output.
     
@@ -50,17 +63,12 @@ def play_test_tone(device_index=None, duration=2.0, frequency=1000):
     print(f"Device: {device_index if device_index is not None else 'Default'}")
     print(f"Frequency: {frequency} Hz")
     print(f"Duration: {duration} seconds")
-    print(f"Sample Rate: {sample_rate} Hz")
-    print()
-    print("You should hear a tone. If using VOX mode, the radio should key up.")
     print()
     
-    # Generate test tone
     t = np.linspace(0, duration, int(sample_rate * duration), False)
-    tone = 0.5 * np.sin(2 * np.pi * frequency * t)
+    tone = 0.7 * np.sin(2 * np.pi * frequency * t)
     
-    # Add fade in/out to avoid clicks
-    fade_samples = int(0.01 * sample_rate)  # 10ms fade
+    fade_samples = int(0.01 * sample_rate)
     fade_in = np.linspace(0, 1, fade_samples)
     fade_out = np.linspace(1, 0, fade_samples)
     tone[:fade_samples] *= fade_in
@@ -76,16 +84,50 @@ def play_test_tone(device_index=None, duration=2.0, frequency=1000):
         return False
 
 
+def test_ptt(port, duration=2.0):
+    """
+    Test hardware PTT via AIOC serial port DTR.
+
+    Args:
+        port: Serial port path (e.g. /dev/ttyACM0)
+        duration: Seconds to hold PTT
+    """
+    try:
+        import serial
+    except ImportError:
+        print("✗ pyserial not installed. Run: pip install pyserial")
+        return False
+
+    print(f"\n=== Testing Hardware PTT ===")
+    print(f"Port: {port}")
+    print(f"PTT ON for {duration} seconds — radio TX LED should light up")
+    print()
+
+    try:
+        ser = serial.Serial(port, timeout=1)
+        ser.dtr = True
+        print("✓ PTT asserted (DTR=True)")
+        import time
+        time.sleep(duration)
+        ser.dtr = False
+        ser.close()
+        print("✓ PTT released (DTR=False)")
+        return True
+    except Exception as e:
+        print(f"✗ PTT test failed: {e}")
+        return False
+
+
 def main():
     """Main test utility."""
     print("=" * 60)
-    print("Pi Fox Beacon - Audio Device Test Utility")
+    print("Pi Fox Beacon - AIOC Test Utility")
     print("=" * 60)
     
-    # List all devices
     list_devices()
+    list_serial_ports()
     
-    # Get user choice
+    # Audio device test
     print("=" * 60)
     print("Select an audio device to test:")
     print("  - Enter device number [0-N] to test specific device")
@@ -107,34 +149,48 @@ def main():
             print(f"Invalid device index: {choice}")
             sys.exit(1)
     
-    # Play test tone
-    success = play_test_tone(device_index)
+    audio_ok = play_test_tone(device_index)
     
-    if success:
-        print()
-        print("✓ Audio test successful!")
-        print()
-        print("If the Baofeng keyed up (PTT LED lit), VOX is working correctly.")
-        print("If not, check:")
-        print("  - BTECH APRS-K1 cable fully seated in both UGREEN and Baofeng K-port")
-        print("  - Baofeng VOX enabled (Menu → VOX → Level 5)")
-        print("  - Baofeng battery charged")
+    # PTT test
+    print()
+    print("=" * 60)
+    print("Test hardware PTT via AIOC? (requires AIOC connected)")
+    ptt_choice = input("Enter serial port (e.g. /dev/ttyACM0) or press ENTER to skip: ").strip()
+    
+    if ptt_choice:
+        ptt_ok = test_ptt(ptt_choice)
+    else:
+        ptt_ok = None
+        print("Skipping PTT test.")
+    
+    # Summary
+    print()
+    print("=" * 60)
+    print("Results:")
+    if audio_ok:
+        print("  ✓ Audio output: OK")
+    else:
+        print("  ✗ Audio output: FAILED")
+        print("    - Verify AIOC is plugged in (lsusb)")
+        print("    - Check: pip install sounddevice")
+        print("    - Try: aplay -l")
+
+    if ptt_ok is True:
+        print("  ✓ Hardware PTT: OK")
         print()
         print("Next steps:")
-        print("  1. Edit config.yaml and set your callsign (required!)")
-        print("  2. Set device_index if not using default device")
-        print("  3. Adjust vox_trigger_level if VOX sensitivity needs tuning")
-        print("  4. Run: python beacon.py")
+        print("  1. Edit config.yaml — set your callsign and ptt.port")
+        print("  2. Run: python beacon.py")
+    elif ptt_ok is False:
+        print("  ✗ Hardware PTT: FAILED")
+        print("    - Check serial port with: ls /dev/ttyACM*")
+        print("    - Verify user is in dialout group: sudo usermod -aG dialout $USER")
     else:
         print()
-        print("✗ Audio test failed.")
-        print()
-        print("Troubleshooting:")
-        print("  - Verify UGREEN adapter is plugged into Pi USB port")
-        print("  - Check that sounddevice is installed: pip install sounddevice")
-        print("  - Try a different USB port")
-        print("  - Run: aplay -l  (to list ALSA devices)")
-    
+        print("Next steps:")
+        print("  1. Edit config.yaml — set your callsign")
+        print("  2. Set ptt.port to your AIOC serial port (e.g. /dev/ttyACM0)")
+        print("  3. Run: python beacon.py")
     print()
 
 

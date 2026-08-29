@@ -1,15 +1,15 @@
-# MVP: USB Sound Interface + VOX Mode
+# MVP: AIOC Hardware PTT Interface
 
 ## Overview
 
-This MVP simplifies the original PiTower Radio design by eliminating custom hardware and using readily-available components:
+This MVP uses the **NA6D AIOC (All-In-One Cable)** to combine USB audio and hardware PTT control into a single plug-and-play adapter. This replaces the separate USB audio dongle + BTECH cable used in the original VOX-only approach.
 
-- **Raspberry Pi 3 Model B+** (quad-core 1.4GHz, built-in WiFi)
-- **UGREEN USB Audio Adapter** (24bit/96kHz DAC, TRRS)
-- **BTECH APRS-K1 Cable** (Kenwood K1 to 3.5mm TRRS audio interface)
-- **Baofeng UV-5RX3** in VOX mode (voice-activated transmission)
+**Hardware:**
+- Raspberry Pi (any model with USB)
+- [NA6D AIOC adapter](https://na6d.com/products/aioc-ham-radio-all-in-one-cable) (~$40)
+- Baofeng UV-5R series radio (Kenwood K1 / K-port compatible)
 
-No custom HATs, no PTT control circuit, no RF attenuator — just software-generated audio triggering the radio's built-in VOX.
+**No VOX required** — the AIOC provides hardware PTT via serial port DTR, giving precise control over transmit timing.
 
 **📖 For complete hardware setup instructions, see [mvp-hardware-setup.md](mvp-hardware-setup.md)**
 
@@ -17,66 +17,54 @@ No custom HATs, no PTT control circuit, no RF attenuator — just software-gener
 
 ## Hardware Requirements
 
-### Components (Actual Setup)
+### Components
 
 | Component | Part Number / Model | Price | Status |
 |-----------|-------------------|-------|--------|
 | Raspberry Pi | Raspberry Pi 3 Model B+ | ~$40 | Ordered (SparkFun #430326) |
-| USB Audio Dongle | UGREEN USB to 3.5mm Jack Audio Adapter (24bit/96kHz, TRRS, 9.8") | ~$15 | Ordered (Amazon) |
-| Audio Cable | BTECH APRS-K1 Multi-Function Universal Audio Interface Cable | ~$25 | On hand |
+| AIOC Adapter | NA6D AIOC Ham Radio All-In-One Cable | ~$40 | Purchase at na6d.com |
 | Baofeng Radio | K5PLUS (10W tri-band, ASIN B0GTDDRGY7) | ~$40 | On hand |
 | Power Supply | 5V/2.5A USB power supply or power bank | ~$10 | TBD |
 
-**Radio Specifications (K5PLUS):**
-- **Frequency:** 136-174 MHz (VHF), 220-260 MHz (1.25m), 400-480 MHz (UHF)
-- **Power:** Tri-power: 10W (HIGH), 7W (MID), 4W (LOW)
-- **Channels:** 999 memory channels
-- **Features:** VOX, CTCSS/DCS, voice scramble, frequency copy, NOAA weather
-- **Battery:** 2500mAh Li-ion (USB-C + desktop charging)
-- **Display:** 1.77" color LCD
-- **Antenna:** SMA-F detachable
+**Total Hardware Cost:** ~$90 (excluding radio already on hand)
 
-**Total Hardware Cost:** ~$90 (excluding radio and power supply already on hand)
+### What the AIOC Provides
 
-### Alternative Cable Option
+The AIOC is a single USB-C device that replaces multiple adapters:
 
-Also available: [Digirig Baofeng Cables Set](https://digirig.net/product/baofeng-cables/) (~$35)
-- Higher quality shielded cables with ferrite chokes
-- Dual 3.5mm plugs (separate mic/speaker)
-- Can be used instead of APRS-K1 if preferred
+| Function | How |
+|----------|-----|
+| USB sound card (TX audio) | Built-in STM32 DAC |
+| Hardware PTT | Serial port DTR line |
+| Radio programming | Virtual COM port (CHIRP compatible) |
+
+**Radio Compatibility:** Kenwood K1 (2-pin) connector — Baofeng UV-5R, UV-5RX3, K5PLUS, Quansheng UV-K5, BTech, and others. *Not compatible with Icom, Yaesu, or waterproof Baofeng models (e.g. UV-9R).*
 
 ### Wiring Diagram
 
 ```
-Raspberry Pi 3 B+
+Raspberry Pi
     ↓ USB-A port
-UGREEN USB Audio Adapter (24bit/96kHz)
-    ↓ 3.5mm TRRS jack
-BTECH APRS-K1 Cable (3.5mm TRRS plug → Kenwood K1 connector)
-    ↓ Kenwood K1 plug (2-pin)
-Baofeng UV-5RX3 K-port
+NA6D AIOC adapter (USB-C)
+    ↓ Kenwood K1 plug (2-pin, built into AIOC cable)
+Baofeng K-port (side of radio)
 ```
 
 **Signal Path:**
 - Pi generates audio in software (numpy sine waves)
-- Audio output via ALSA to USB audio device
-- UGREEN adapter converts USB digital audio to analog 3.5mm
-- APRS-K1 cable routes audio to Baofeng microphone input
-- Baofeng VOX detects audio and keys PTT automatically
-- No GPIO or hardware PTT control needed!
+- Audio output via ALSA to AIOC USB sound device
+- PTT asserted via AIOC serial port DTR before audio starts
+- AIOC keys radio PTT directly (no VOX needed)
+- PTT released after audio completes
 
 ### Kenwood K1 Connector Pinout
 
-The Baofeng K-port uses standard Kenwood K1 (2-pin):
+The AIOC terminates in a standard Kenwood K1 (2-pin) connector:
 - **3.5mm jack:** Speaker output (from radio)
 - **2.5mm jack:** Microphone input + PTT
-  - Tip: Microphone (audio from Pi goes here)
-  - Sleeve: PTT (grounded to transmit, floating for receive)
+  - Tip: Microphone (TX audio from AIOC DAC)
+  - Sleeve: PTT (AIOC asserts this to transmit)
   - Ring: Ground
-
-**For VOX mode:** Only the microphone input is used. PTT pin is left floating.
-
-**Note:** K5PLUS uses same K1 connector as UV-5R series, so BTECH APRS-K1 cable is compatible.
 
 ---
 
@@ -84,81 +72,105 @@ The Baofeng K-port uses standard Kenwood K1 (2-pin):
 
 ### Core Components
 
-1. **Audio Generator**
-   - Python script using `pyaudio` or similar
-   - Generates beacon tones (morse code, CW ID, voice messages)
-   - Routes audio to USB sound device
+1. **Beacon Controller** (`beacon.py`)
+   - Asserts PTT via serial DTR before each transmission
+   - Releases PTT after audio playback completes
+   - Falls back to VOX mode if `ptt.enabled: false` in config
 
-2. **Beacon Controller**
-   - Schedule-based transmission
-   - Power level simulation (adjust audio volume to trigger VOX at different ranges)
-   - Configurable beacon patterns
+2. **Audio Generator** (`audio_generator.py`)
+   - Generates beacon tones (morse code, CW ID)
+   - Routes audio to AIOC USB sound device via sounddevice/ALSA
 
-3. **Configuration**
-   - YAML or JSON config file
-   - Callsign, beacon interval, message patterns
-   - VOX sensitivity compensation (audio level adjustment)
+3. **Morse Code Generator** (`morse.py`)
+   - Encodes text to CW audio at configurable WPM
+
+4. **Configuration** (`config.yaml`)
+   - Callsign, beacon interval, morse settings
+   - AIOC serial port and PTT timing
 
 ### Key Software Dependencies
 
 - Python 3.x
-- `pyaudio` or `sounddevice` (audio output)
+- `sounddevice` (audio output via ALSA)
 - `numpy` (waveform generation)
+- `pyserial` (PTT via AIOC serial DTR)
 - `pyyaml` (configuration)
 
 ---
 
-## VOX Mode Configuration
+## PTT Configuration
 
-The Baofeng must be configured for VOX operation:
+The AIOC appears as two devices on Linux:
+- **USB sound card** — detected automatically by ALSA
+- **Serial port** — typically `/dev/ttyACM0`
 
-1. **Radio Settings:**
-   - VOX level: Start with level 3-5 (adjust based on testing)
-   - VOX delay: 0.5-1.0 seconds (delay after audio stops before PTT release)
-   - Frequency: Set to desired beacon frequency
-   - Power: High (10W), Mid (7W), or Low (4W) as needed
+### Find the AIOC Serial Port
 
-2. **Audio Level Calibration:**
-   - Too loud: VOX triggers on background noise
-   - Too quiet: VOX doesn't trigger reliably
-   - Target: Clean activation on beacon tones, no false triggers
+```bash
+ls /dev/ttyACM*
+# or
+ls /dev/serial/by-id/ | grep -i aioc
+```
+
+### Grant Serial Port Access
+
+```bash
+sudo usermod -aG dialout $USER
+# Log out and back in for group change to take effect
+```
+
+### config.yaml PTT Settings
+
+```yaml
+ptt:
+  enabled: true
+  port: "/dev/ttyACM0"   # Adjust if needed
+  ptt_on_delay: 0.05     # Seconds after PTT before audio
+  ptt_off_delay: 0.05    # Seconds after audio before PTT release
+```
 
 ---
 
-## Advantages of MVP Approach
+## Advantages Over VOX-Only Approach
 
-✅ **No custom PCB required** — use off-the-shelf components  
-✅ **Rapid prototyping** — test beacon logic immediately  
-✅ **Low cost** — under $50 in parts (excluding radio)  
-✅ **Easy debugging** — all components are standard and well-documented  
-✅ **Portable** — entire system fits in a small case  
+✅ **No VOX required** — precise PTT timing, no preamble tone needed  
+✅ **Single cable** — AIOC replaces USB audio dongle + BTECH APRS-K1 cable  
+✅ **Instant PTT** — no 100-500ms VOX latency  
+✅ **Clean transmissions** — first morse element is never clipped  
+✅ **Open source hardware** — AIOC firmware and schematics on GitHub  
+✅ **Plug-and-play** — no drivers needed on Linux/Windows/macOS  
 
 ---
 
 ## Limitations vs. Full PiTower Design
 
-❌ **No RF power stepping** — MVP uses fixed radio power level (HIGH=10W, MID=7W, or LOW=4W)  
-❌ **VOX latency** — ~100-500ms delay before transmission starts  
-❌ **Less precise PTT control** — VOX may hold PTT longer than needed  
-❌ **Audio quality dependent** — VOX sensitivity varies with tone/voice characteristics  
-❌ **No hardware PTT** — can't do instant-on transmissions  
+❌ **No RF power stepping** — radio transmits at fixed selected power  
+❌ **No hardware integration** — separate Pi + radio + cable  
 
-**Note:** Audio amplitude does NOT affect FM carrier power. The radio transmits at full selected power (10W/7W/4W) regardless of audio level. Audio level only affects VOX triggering reliability, not transmitted signal strength or S-meter readings on receivers.
+**Note:** Audio amplitude affects FM audio deviation, not carrier power. The radio transmits at full selected power (10W/7W/4W) regardless of audio level.
+
+---
+
+## Fallback: VOX Mode
+
+If the AIOC is unavailable, set `ptt.enabled: false` in config.yaml and configure the radio for VOX mode:
+
+1. Press MENU → VOX → Set level 5 (adjust as needed)
+2. Increase `pre_audio_silence` to ~0.3s in config to compensate for VOX latency
 
 ---
 
 ## Migration Path to Full Design
 
 This MVP validates:
-- Audio generation logic
+- Audio generation and morse code encoding
 - Beacon timing and scheduling
-- Message encoding (morse code, voice synthesis)
-- Field deployment workflows
+- Hardware PTT control via serial
 
 Once proven, the full PiTower design adds:
-- Hardware PTT control (precise timing)
+- GPIO-based PTT (no USB serial dependency)
 - RF attenuator (programmable power stepping)
-- Custom audio codec (better audio quality)
+- Custom audio codec
 - Integrated power management (24+ hour runtime)
 
 ---
@@ -167,19 +179,17 @@ Once proven, the full PiTower design adds:
 
 ### Phase 1: Basic Beacon ✅ (Implemented in this PR)
 - [x] USB audio device detection and configuration
-- [x] Simple tone generator (1kHz test tone)
-- [x] VOX trigger testing via test_audio.py
+- [x] Simple tone generator (700 Hz CW tone)
+- [x] Hardware PTT via AIOC serial DTR
 - [x] Basic beacon loop (transmit every N minutes)
 - [x] Morse code generator (callsign identification)
-- [x] CW tone generation (600-800 Hz)
 - [x] WPM configuration
-- [ ] Hardware testing with actual Pi 3 B+ + UGREEN + BTECH APRS-K1
-- [ ] VOX calibration and tuning
+- [ ] Hardware testing with actual Pi + AIOC + radio
+- [ ] PTT timing calibration
 
 ### Phase 2: Field Testing (Next)
 - [ ] Bench test complete hardware stack
-- [ ] Verify VOX triggering reliability
-- [ ] Measure VOX latency and PTT hold time
+- [ ] Verify PTT timing (ptt_on_delay / ptt_off_delay)
 - [ ] Range testing (High vs Low power)
 - [ ] Signal quality reports from receivers
 - [ ] 24-hour continuous beacon test
@@ -187,50 +197,41 @@ Once proven, the full PiTower design adds:
 
 ### Phase 3: Voice Messages
 - [ ] Text-to-speech integration (pyttsx3 or festival)
-- [ ] Voice message queue
-- [ ] Callsign announcement in voice
 - [ ] Mixed morse + voice announcements
 
 ### Phase 4: Remote Control
 - [ ] Web interface for configuration
 - [ ] SSH-based remote control
 - [ ] Status monitoring/logging
-- [ ] Remote shutdown/restart
-- [ ] (Future: DTMF control if we add audio input)
 
 ---
 
 ## Testing Plan
 
 ### 1. Bench Testing (With Hardware)
-- [ ] Verify UGREEN adapter detected by Pi (lsusb, aplay -l)
-- [ ] Run test_audio.py and verify tone output
-- [ ] Confirm Baofeng VOX triggers (PTT LED lights)
-- [ ] Test different VOX levels (1-10 on radio)
-- [ ] Test different vox_trigger_level values (0.3-0.8 in config)
-- [ ] Measure VOX latency (time from audio start to PTT)
-- [ ] Measure VOX hold time (time from audio stop to PTT release)
+- [ ] Verify AIOC detected by Pi (`lsusb`, `aplay -l`, `ls /dev/ttyACM*`)
+- [ ] Run `test_audio.py` and verify tone output
+- [ ] Test hardware PTT via `test_audio.py` PTT section
+- [ ] Confirm radio TX LED lights during PTT test
 - [ ] Verify morse code is readable (listen on second radio)
+- [ ] Measure PTT-to-audio latency
 
 ### 2. Field Testing
 - [ ] Transmit range testing at HIGH power (10W)
-- [ ] Transmit range testing at LOW power (5W)
+- [ ] Transmit range testing at LOW power (4W)
 - [ ] Signal quality reports from receivers
-- [ ] Battery runtime testing (Pi + Baofeng on power bank)
-- [ ] Outdoor deployment test (weatherproofing, mounting)
+- [ ] Battery runtime testing (Pi + radio on power bank)
+- [ ] Outdoor deployment test
 
 ### 3. Integration Testing
 - [ ] 24-hour continuous beacon operation
-- [ ] Configuration change testing (live reload)
 - [ ] Error recovery (USB disconnect, audio device reset)
-- [ ] Error recovery (power loss/restore)
 - [ ] Log analysis (missed beacons, timing accuracy)
 
 ### 4. Fox Hunt Validation
 - [ ] Deploy as actual fox in practice hunt
 - [ ] Gather feedback from hunters on signal clarity
 - [ ] Validate beacon timing meets hunt requirements
-- [ ] Test portability (setup/teardown time)
 
 ---
 
@@ -242,10 +243,10 @@ See detailed hardware setup instructions:
 
 ## Reference Links
 
-- [Baofeng UV-5R VOX Mode Guide](https://www.miklor.com/uv5r/)
+- [NA6D AIOC Product Page](https://na6d.com/products/aioc-ham-radio-all-in-one-cable)
+- [AIOC Open Source Project (GitHub)](https://github.com/skuep/AIOC)
+- [AIOC Documentation](https://skuep.github.io/AIOC/)
 - [Raspberry Pi Audio Configuration](https://www.raspberrypi.org/documentation/usage/audio/)
-- [BTECH APRS-K1 Cable Documentation](https://baofengtech.com/product/aprs-k1/)
-- [UGREEN USB Audio Adapter](https://www.amazon.com/UGREEN-Adapter-Support-Headphone-Compatible/dp/B08Y8CZB2S)
 
 ---
 

@@ -7,40 +7,37 @@ callsign: "K7LED"  # M&K Club Call
 beacon_interval_seconds: 60  # Time between beacon transmissions
 identification_interval_seconds: 600  # CW ID every 10 minutes (FCC requirement)
 
+# AIOC (All-In-One Cable) PTT configuration
+# The AIOC provides hardware PTT via serial port DTR line.
+# Run: ls /dev/ttyACM* or ls /dev/serial/by-id/ to find the AIOC port.
+# Set ptt_enabled: false to use VOX mode instead (e.g. if AIOC is unavailable).
+ptt:
+  enabled: true
+  port: "/dev/ttyACM0"  # AIOC serial port (adjust if multiple USB-serial devices)
+  ptt_on_delay: 0.05    # Seconds to wait after asserting PTT before sending audio
+  ptt_off_delay: 0.05   # Seconds to wait after audio ends before releasing PTT
+
 # Audio device configuration
 audio:
   # Device index (run test_audio.py to list available devices)
   # Use null to auto-select default output device
-  # UGREEN USB adapter typically shows as "USB Audio Device" or similar
+  # AIOC typically shows as "USB Audio Device" or "AIOC" in the device list
   device_index: null
   
   # Sample rate (Hz)
-  # UGREEN adapter supports up to 96kHz, but 48kHz is sufficient for beacon
   sample_rate: 48000
   
-  # VOX trigger level (0.0 to 1.0)
-  # 0.5 = 50% of maximum amplitude
-  # Adjust based on radio's VOX sensitivity
-  # Start with 0.6 and Baofeng VOX level 5, then tune as needed
-  # Too high = false triggers, too low = unreliable keying
-  # NOTE: Audio amplitude does NOT affect FM carrier power, only deviation
-  vox_trigger_level: 0.6
-  
-  # VOX preamble (seconds)
-  # Tone played BEFORE message to allow VOX to stabilize and PTT to engage
-  # Prevents clipping of first morse code element
-  # 0.3 seconds recommended for Baofeng VOX (adjust based on testing)
-  vox_preamble: 0.3
+  # Audio amplitude (0.0 to 1.0)
+  # With hardware PTT this only affects audio deviation, not VOX triggering
+  amplitude: 0.7
   
   # Pre-transmission silence (seconds)
-  # Brief silence before audio (after preamble finishes)
-  # Not needed for VOX triggering, but can help with audio cleanup
+  # Brief silence after PTT asserted before audio starts
   pre_audio_silence: 0.0
   
   # Post-transmission silence (seconds)
-  # Silence after audio before ending (VOX hold time)
-  # Baofeng VOX delay adds additional hold time
-  post_audio_silence: 0.5
+  # Silence after audio before PTT release
+  post_audio_silence: 0.1
 
 # Morse code settings
 morse:
