@@ -22,7 +22,25 @@ Quick reference for assembling and configuring the MVP beacon hardware using the
 
 ### Step 1: Prepare Raspberry Pi
 
-1. Flash Raspberry Pi OS (Lite or Desktop) to microSD card
+#### Recommended OS Image
+
+**Raspberry Pi OS Lite (64-bit)** — Debian 13 (Trixie), Kernel 6.18
+
+The beacon runs headless (no desktop required). The Lite image keeps
+the footprint small and is the right choice for the Pi 3 Model B+.
+
+> **Download page:**
+> <https://www.raspberrypi.com/software/operating-systems/>
+>
+> Under **"Raspberry Pi OS (64-bit)"**, choose **Raspberry Pi OS Lite**.
+> Released 18 Jun 2026 · ~501 MB download · ~2.8 GB on SD card.
+
+The easiest way to flash the image is
+[Raspberry Pi Imager](https://www.raspberrypi.com/software/), which
+lets you preconfigure hostname, SSH, and Wi-Fi credentials before
+writing — skip steps 2–3 below if you use it.
+
+1. Flash **Raspberry Pi OS Lite (64-bit)** to a microSD card (8 GB+)
 2. Enable SSH (create empty `ssh` file in boot partition)
 3. Configure WiFi (create `wpa_supplicant.conf` if headless)
 4. Insert SD card and power on Pi
