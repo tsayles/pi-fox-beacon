@@ -122,7 +122,7 @@ writing — skip steps 2–3 below if you use it.
 1. Edit `config.yaml`:
    - Set your callsign (required for legal operation)
    - Set `ptt.port` to your AIOC serial port
-   - Set beacon interval (60 seconds recommended for testing)
+   - Set beacon interval (15 seconds — clock-synced to :00/:15/:30/:45)
 
 2. Run beacon:
    ```bash
@@ -159,9 +159,10 @@ For readable morse code:
 
 ### Beacon Intervals
 
-**For testing:** 30-60 seconds  
-**For actual fox hunt:** 60-120 seconds  
-**FCC Identification:** Every 10 minutes (automatic in beacon.py)
+**Nominal interval (testing and fox hunting):** 15 seconds, clock-synced
+to :00, :15, :30, :45 per the system clock.  
+**FCC Identification:** Included in every transmission (`DE {callsign}`
+appended after the tone pattern).
 
 ---
 
