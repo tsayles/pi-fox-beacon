@@ -1,70 +1,51 @@
 # Beacon Configuration
 
-# Amateur radio callsign (required for legal identification)
-callsign: "K7LED"  # M&K Club Call
+callsign: "KE4HET"
 
-# Beacon timing
-beacon_interval_seconds: 60  # Time between beacon transmissions
-identification_interval_seconds: 600  # CW ID every 10 minutes (FCC requirement)
+# Beacon interval — synced to system clock.
+# 15 = fires at :00, :15, :30, :45 each minute.
+beacon_interval_seconds: 15
 
-# AIOC (All-In-One Cable) PTT configuration
-# The AIOC provides hardware PTT via serial port DTR line.
-# Run: ls /dev/ttyACM* or ls /dev/serial/by-id/ to find the AIOC port.
-# Set ptt_enabled: false to use VOX mode instead (e.g. if AIOC is unavailable).
+# AIOC PTT (ioctl TIOCMBIS/TIOCMBIC — pyserial dtr alone does not work)
 ptt:
   enabled: true
-  port: "/dev/ttyACM0"  # AIOC serial port (adjust if multiple USB-serial devices)
-  ptt_on_delay: 0.05    # Seconds to wait after asserting PTT before sending audio
-  ptt_off_delay: 0.05   # Seconds to wait after audio ends before releasing PTT
+  port: "/dev/serial/by-id/usb-AIOC_All-In-One-Cable_3380a5b0-if04"
+  ptt_on_delay: 0.05
+  ptt_off_delay: 0.05
 
-# Audio device configuration
+# Audio — use aplay ALSA device, NOT sounddevice (causes USB timeouts)
 audio:
-  # Device index (run test_audio.py to list available devices)
-  # Use null to auto-select default output device
-  # AIOC typically shows as "USB Audio Device" or "AIOC" in the device list
-  device_index: null
-  
-  # Sample rate (Hz)
+  alsa_device: "plughw:AllInOneCable,0"
   sample_rate: 48000
-  
-  # Audio amplitude (0.0 to 1.0)
-  # With hardware PTT this only affects audio deviation, not VOX triggering
   amplitude: 0.7
-  
-  # Pre-transmission silence (seconds)
-  # Brief silence after PTT asserted before audio starts
   pre_audio_silence: 0.0
-  
-  # Post-transmission silence (seconds)
-  # Silence after audio before PTT release
   post_audio_silence: 0.1
 
-# Morse code settings
+# Multi-tone identification pattern (Byonics MF-15 compatible)
+# Tone indices map to a chromatic scale: index 26 = 700 Hz.
+# Index 0 = silence.
+# speed_ms: duration per element in milliseconds.
+# 64 elements × 75 ms = 4.8 s ≈ 5 s pattern.
+tones:
+  enabled: true
+  speed_ms: 75
+  sequence: "1,20,1,20,1,11,11,11,1,20,1,20,1,11,11,11,\
+1,23,1,23,1,16,16,16,1,23,1,23,1,16,16,16,\
+1,26,1,26,1,20,20,20,1,26,1,26,1,20,20,20,\
+1,28,1,28,1,23,23,23,1,28,1,28,1,23,23,23"
+
+# CW identification appended after tone pattern
 morse:
-  # Speed in words per minute
   wpm: 20
-  
-  # Tone frequency (Hz)
-  frequency: 700
-  
-  # Farnsworth timing (use slower character spacing for readability)
-  # Set to same as wpm for standard timing
+  frequency: 700    # Hz (matches tone index 26)
   farnsworth_wpm: 20
 
-# Beacon message
+# Message section
 message:
-  # Message type: "tone", "morse", "voice" (voice not yet implemented)
-  type: "morse"
-  
-  # For morse type: text to send
-  text: "FOX DE {callsign}"
-  
-  # For tone type: frequency (Hz) and duration (seconds)
-  tone_frequency: 1000
-  tone_duration: 2.0
+  pause_before_cw: 0.3   # seconds between tone pattern and CW ID
 
 # Logging
 logging:
-  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
   file: "beacon.log"
   console: true

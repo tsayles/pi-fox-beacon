@@ -2,289 +2,298 @@
 """
 Main beacon control script for MVP implementation.
 
-Controls beacon timing, message generation, and audio output
-for AIOC (All-In-One Cable) hardware PTT mode.
+Transmission format (every 15 seconds, synced to system clock):
+  1. Multi-tone pattern (~5 s, Byonics MF-15 compatible sweep)
+  2. CW identification: DE {callsign}
 
-Hardware Setup:
-- Raspberry Pi (any model with USB)
-- NA6D AIOC adapter (USB sound card + serial PTT in one device)
-- Baofeng UV-5R series radio (Kenwood K1 / K-port)
+Hardware:
+  - Raspberry Pi 3 B+ / Debian 13 / Python 3.13
+  - NA6D AIOC adapter v1.0
+  - Baofeng K5PLUS (Kenwood K1 / K-port)
 
-The beacon:
-1. Asserts PTT via AIOC serial port DTR line
-2. Waits briefly for radio to key up
-3. Generates morse code or tone audio in software (numpy)
-4. Outputs audio via ALSA to AIOC USB sound device
-5. Releases PTT after audio completes
-
-Fallback (VOX mode):
-- Set ptt.enabled: false in config.yaml
-- Radio must be configured for VOX mode
+PTT:  ioctl TIOCMBIS (set DTR) + TIOCMBIC (clear RTS)
+Audio: subprocess aplay via plughw:AllInOneCable,0
 """
 
-import time
+import fcntl
 import logging
-import yaml
+import os
+import struct
 import sys
+import time
 from contextlib import contextmanager
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import yaml
 
 from audio_generator import AudioGenerator
 from morse import create_morse_audio
 
+# ---------------------------------------------------------------------------
+# ioctl modem line constants (Linux)
+# ---------------------------------------------------------------------------
+try:
+    import termios
+    _TIOCMBIS = termios.TIOCMBIS
+    _TIOCMBIC = termios.TIOCMBIC
+    _TIOCM_DTR = termios.TIOCM_DTR
+    _TIOCM_RTS = termios.TIOCM_RTS
+except (ImportError, AttributeError):
+    _TIOCMBIS = 0x5416
+    _TIOCMBIC = 0x5417
+    _TIOCM_DTR = 0x002
+    _TIOCM_RTS = 0x004
 
+# ---------------------------------------------------------------------------
+# Byonics tone-index → frequency table
+# Chromatic scale; index 26 ≈ 700 Hz (standard CW sidetone).
+# Index 0 = silence.  Matches MF-15 / MF-PC tone numbering.
+# ---------------------------------------------------------------------------
+_TONE_TABLE = {
+    i: 700.0 * (2 ** ((i - 26) / 12.0)) for i in range(32)
+}
+_TONE_TABLE[0] = 0.0  # silence
+
+
+# ---------------------------------------------------------------------------
+# PTT context manager
+# ---------------------------------------------------------------------------
 @contextmanager
 def ptt_context(port, ptt_on_delay=0.05, ptt_off_delay=0.05):
     """
-    Context manager that asserts PTT via serial DTR on enter and releases on exit.
+    Assert PTT via ioctl TIOCMBIS/TIOCMBIC on the AIOC serial port.
 
-    Args:
-        port: Serial port path (e.g. /dev/ttyACM0)
-        ptt_on_delay: Seconds to wait after asserting PTT
-        ptt_off_delay: Seconds to wait before releasing PTT
+    AIOC v1.0 requires DTR asserted AND RTS cleared simultaneously.
+    pyserial s.dtr = True alone does not work — raw ioctl is required.
     """
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
     try:
-        import serial as _serial
-    except ImportError as exc:
-        raise ImportError(
-            "pyserial is required for hardware PTT. Install with: pip install pyserial"
-        ) from exc
-
-    ser = None
-    try:
-        ser = _serial.Serial(port, timeout=1)
-        ser.dtr = True
+        fcntl.ioctl(fd, _TIOCMBIS, struct.pack('I', _TIOCM_DTR))
+        fcntl.ioctl(fd, _TIOCMBIC, struct.pack('I', _TIOCM_RTS))
         time.sleep(ptt_on_delay)
         yield
     finally:
         time.sleep(ptt_off_delay)
-        if ser is not None:
-            ser.dtr = False
-            ser.close()
+        fcntl.ioctl(fd, _TIOCMBIC, struct.pack('I', _TIOCM_DTR))
+        fcntl.ioctl(fd, _TIOCMBIS, struct.pack('I', _TIOCM_RTS))
+        os.close(fd)
 
 
+# ---------------------------------------------------------------------------
+# Beacon controller
+# ---------------------------------------------------------------------------
 class BeaconController:
     """Main beacon controller."""
-    
+
     def __init__(self, config_file="config.yaml"):
-        """
-        Initialize beacon controller.
-        
-        Args:
-            config_file: Path to configuration file
-        """
         self.config = self.load_config(config_file)
         self.setup_logging()
+
+        audio_cfg = self.config['audio']
         self.audio_gen = AudioGenerator(
-            sample_rate=self.config['audio']['sample_rate'],
-            amplitude=self.config['audio']['amplitude']
+            sample_rate=audio_cfg['sample_rate'],
+            amplitude=audio_cfg['amplitude']
         )
-        self.device_index = self.config['audio']['device_index']
-        self.running = False
-        self.last_id_time = None
-        
+        self.alsa_device = audio_cfg['alsa_device']
+
         ptt_cfg = self.config.get('ptt', {})
         self.ptt_enabled = ptt_cfg.get('enabled', False)
         self.ptt_port = ptt_cfg.get('port', '/dev/ttyACM0')
         self.ptt_on_delay = ptt_cfg.get('ptt_on_delay', 0.05)
         self.ptt_off_delay = ptt_cfg.get('ptt_off_delay', 0.05)
-        
+
+        self.running = False
+
+        interval = self.config['beacon_interval_seconds']
         self.logger.info("Beacon controller initialized")
         self.logger.info(f"Callsign: {self.config['callsign']}")
-        self.logger.info(f"Beacon interval: {self.config['beacon_interval_seconds']}s")
         self.logger.info(
-            f"PTT mode: {'hardware DTR (' + self.ptt_port + ')' if self.ptt_enabled else 'VOX (software audio level)'}"
+            f"Interval: {interval}s "
+            f"(clock-synced :00 :{interval} ...)"
         )
-    
+        self.logger.info(
+            "PTT: "
+            + (f"ioctl DTR ({self.ptt_port})"
+               if self.ptt_enabled else "VOX")
+        )
+        self.logger.info(f"Audio: {self.alsa_device}")
+
+    # ------------------------------------------------------------------
     def load_config(self, config_file):
-        """Load configuration from YAML file."""
         with open(config_file, 'r') as f:
             return yaml.safe_load(f)
-    
+
     def setup_logging(self):
-        """Configure logging."""
         log_config = self.config['logging']
         log_level = getattr(logging, log_config['level'])
-        
         handlers = []
-        
         if log_config['console']:
             handlers.append(logging.StreamHandler())
-        
         if log_config['file']:
             handlers.append(logging.FileHandler(log_config['file']))
-        
         logging.basicConfig(
             level=log_level,
             format='%(asctime)s [%(levelname)s] %(message)s',
             handlers=handlers
         )
-        
         self.logger = logging.getLogger(__name__)
-    
-    def generate_message_audio(self):
+
+    # ------------------------------------------------------------------
+    # Tone pattern generation (Byonics MF-15 compatible)
+    # ------------------------------------------------------------------
+    def _generate_tone_pattern(self):
         """
-        Generate audio for beacon message.
-        
-        Returns:
-            numpy array of audio samples
+        Generate multi-tone identification pattern from config sequence.
+
+        The sequence string and speed_ms use the same format as the
+        Byonics MicroFox MF-15 / MF-PC transmitters.  Tone indices map
+        to a chromatic scale with index 26 = 700 Hz.
         """
-        msg_config = self.config['message']
-        msg_type = msg_config['type']
-        
-        if msg_type == "morse":
-            text = msg_config['text'].format(callsign=self.config['callsign'])
-            self.logger.debug(f"Generating morse: {text}")
-            audio = create_morse_audio(
-                text,
-                wpm=self.config['morse']['wpm'],
-                frequency=self.config['morse']['frequency'],
-                sample_rate=self.config['audio']['sample_rate'],
-                amplitude=self.config['audio']['amplitude']
-            )
-        elif msg_type == "tone":
-            self.logger.debug("Generating tone")
-            audio = self.audio_gen.generate_tone(
-                msg_config['tone_frequency'],
-                msg_config['tone_duration']
-            )
-        else:
-            self.logger.error(f"Unknown message type: {msg_type}")
-            return None
-        
-        pre_silence = self.audio_gen.generate_silence(
-            self.config['audio']['pre_audio_silence']
-        )
-        post_silence = self.audio_gen.generate_silence(
-            self.config['audio']['post_audio_silence']
-        )
-        
-        return self.audio_gen.concatenate_audio(pre_silence, audio, post_silence)
-    
-    def generate_id_audio(self):
-        """
-        Generate audio for CW identification.
-        
-        Returns:
-            numpy array of audio samples
-        """
+        tones_cfg = self.config.get('tones', {})
+        if not tones_cfg.get('enabled', True):
+            return self.audio_gen.generate_silence(0)
+
+        speed_ms = tones_cfg.get('speed_ms', 75)
+        seq_str = tones_cfg.get('sequence', '')
+        if not seq_str:
+            return self.audio_gen.generate_silence(0)
+
+        speed_sec = speed_ms / 1000.0
+        sr = self.audio_gen.sample_rate
+        n = int(sr * speed_sec)
+        amp = self.audio_gen.amplitude
+        fade = min(int(0.005 * sr), n // 2)
+
+        chunks = []
+        for idx in (int(x.strip()) for x in seq_str.split(',')):
+            freq = _TONE_TABLE.get(idx, 0.0)
+            if freq == 0.0:
+                chunks.append(np.zeros(n, dtype=np.float32))
+            else:
+                t = np.linspace(0, speed_sec, n, False)
+                chunk = (amp * np.sin(2 * np.pi * freq * t)
+                         ).astype(np.float32)
+                chunk[:fade] *= np.linspace(0, 1, fade)
+                chunk[-fade:] *= np.linspace(1, 0, fade)
+                chunks.append(chunk)
+
+        return np.concatenate(chunks) if chunks \
+            else self.audio_gen.generate_silence(0)
+
+    # ------------------------------------------------------------------
+    # CW ID generation
+    # ------------------------------------------------------------------
+    def _generate_id_audio(self):
+        """Generate 'DE {callsign}' CW audio."""
         text = f"DE {self.config['callsign']}"
-        self.logger.debug(f"Generating ID: {text}")
-        
-        audio = create_morse_audio(
+        self.logger.debug(f"CW ID: {text}")
+        return create_morse_audio(
             text,
             wpm=self.config['morse']['wpm'],
             frequency=self.config['morse']['frequency'],
-            sample_rate=self.config['audio']['sample_rate'],
-            amplitude=self.config['audio']['amplitude']
+            sample_rate=self.audio_gen.sample_rate,
+            amplitude=self.audio_gen.amplitude
         )
-        
-        pre_silence = self.audio_gen.generate_silence(
-            self.config['audio']['pre_audio_silence']
-        )
-        post_silence = self.audio_gen.generate_silence(
-            self.config['audio']['post_audio_silence']
-        )
-        
-        return self.audio_gen.concatenate_audio(pre_silence, audio, post_silence)
-    
-    def needs_identification(self):
-        """
-        Check if station identification is required.
-        
-        Returns:
-            True if ID is needed (every 10 minutes per FCC rules)
-        """
-        if self.last_id_time is None:
-            return True
-        
-        id_interval = self.config['identification_interval_seconds']
-        elapsed = (datetime.now() - self.last_id_time).total_seconds()
-        
-        return elapsed >= id_interval
-    
+
+    # ------------------------------------------------------------------
+    # Transmission
+    # ------------------------------------------------------------------
     def _transmit(self, audio):
-        """
-        Key PTT, play audio, and release PTT.
-
-        Uses hardware DTR PTT via AIOC when enabled, otherwise relies
-        on the radio's VOX mode to key from the audio signal.
-
-        Args:
-            audio: numpy array of audio samples
-        """
+        """Key PTT, play audio, release PTT."""
         if self.ptt_enabled:
-            with ptt_context(self.ptt_port, self.ptt_on_delay, self.ptt_off_delay):
-                self.audio_gen.play(audio, self.device_index)
+            with ptt_context(
+                self.ptt_port,
+                self.ptt_on_delay,
+                self.ptt_off_delay
+            ):
+                self.audio_gen.play(audio, self.alsa_device)
         else:
-            self.audio_gen.play(audio, self.device_index)
+            self.audio_gen.play(audio, self.alsa_device)
 
     def transmit_beacon(self):
-        """Transmit one beacon message."""
+        """
+        Transmit one beacon cycle.
+
+        Format:  [tone pattern ~5 s]  [pause]  [DE {callsign} CW]
+        """
         try:
-            if self.needs_identification():
-                self.logger.info("Transmitting station identification")
-                id_audio = self.generate_id_audio()
-                if id_audio is not None:
-                    self._transmit(id_audio)
-                    self.last_id_time = datetime.now()
-                    time.sleep(1.0)
-            
-            self.logger.info("Transmitting beacon")
-            message_audio = self.generate_message_audio()
-            if message_audio is not None:
-                self._transmit(message_audio)
-                self.logger.info("Transmission complete")
-            else:
-                self.logger.error("Failed to generate message audio")
-                
+            tone_audio = self._generate_tone_pattern()
+            pause_sec = self.config.get('message', {}).get(
+                'pause_before_cw', 0.3
+            )
+            pause = self.audio_gen.generate_silence(pause_sec)
+            id_audio = self._generate_id_audio()
+
+            audio = self.audio_gen.concatenate_audio(
+                tone_audio, pause, id_audio
+            )
+
+            dur = len(audio) / self.audio_gen.sample_rate
+            self.logger.info(
+                f"TX: DE {self.config['callsign']} "
+                f"({dur:.1f}s)"
+            )
+            self._transmit(audio)
+            self.logger.info("TX complete")
+
         except Exception as e:
             self.logger.error(f"Error during transmission: {e}")
-    
+
+    # ------------------------------------------------------------------
+    # Clock-synchronised main loop
+    # ------------------------------------------------------------------
+    def _seconds_until_next_slot(self):
+        """
+        Return seconds until the next clock-aligned beacon slot.
+
+        Slots land at :00, :15, :30, :45 (or whatever the configured
+        interval is).  Never returns less than 0.1 s so we don't
+        fire twice on the same boundary.
+        """
+        interval = self.config['beacon_interval_seconds']
+        now = datetime.now()
+        elapsed = now.second + now.microsecond / 1_000_000
+        wait = interval - (elapsed % interval)
+        return wait if wait >= 0.1 else wait + interval
+
     def run(self):
-        """Run main beacon loop."""
+        """Run beacon loop, firing on clock-aligned boundaries."""
         self.running = True
-        self.logger.info("Starting beacon operation")
-        self.logger.info("Press Ctrl+C to stop")
-        
+        interval = self.config['beacon_interval_seconds']
+        self.logger.info("Starting beacon — press Ctrl+C to stop")
+        self.logger.info(
+            f"Next slot in "
+            f"{self._seconds_until_next_slot():.1f}s"
+        )
+
         try:
             while self.running:
+                wait = self._seconds_until_next_slot()
+                time.sleep(wait)
                 self.transmit_beacon()
-                
-                interval = self.config['beacon_interval_seconds']
-                self.logger.info(f"Waiting {interval} seconds until next beacon...")
-                time.sleep(interval)
-                
         except KeyboardInterrupt:
             self.logger.info("Received shutdown signal")
         finally:
             self.stop()
-    
+
     def stop(self):
-        """Stop beacon operation."""
         self.running = False
-        self.audio_gen.stop()
         self.logger.info("Beacon stopped")
 
 
+# ---------------------------------------------------------------------------
 def main():
-    """Main entry point."""
     print("=" * 60)
-    print("Pi Fox Beacon - MVP Implementation")
-    print("AIOC Hardware PTT Mode")
+    print("Pi Fox Beacon - MVP")
     print("=" * 60)
     print()
-    
     config_file = Path("config.yaml")
     if not config_file.exists():
         print("ERROR: config.yaml not found!")
-        print("Please create config.yaml before running the beacon.")
-        print("See config.yaml.example for template.")
         sys.exit(1)
-    
-    beacon = BeaconController()
-    beacon.run()
+    BeaconController(config_file).run()
 
 
 if __name__ == "__main__":
