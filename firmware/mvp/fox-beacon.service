@@ -1,0 +1,15 @@
+[Unit]
+Description=Pi Fox Beacon
+After=network.target sound.target
+Wants=sound.target
+
+[Service]
+Type=simple
+User=tsayles
+WorkingDirectory=/home/tsayles/pi-fox-beacon/firmware/mvp
+ExecStart=/usr/bin/python3 beacon.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
