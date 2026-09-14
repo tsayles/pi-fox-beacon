@@ -41,15 +41,75 @@ lets you preconfigure hostname, SSH, and Wi-Fi credentials before
 writing — skip steps 2–3 below if you use it.
 
 1. Flash **Raspberry Pi OS Lite (64-bit)** to a microSD card (8 GB+)
-2. Enable SSH (create empty `ssh` file in boot partition)
-3. Configure WiFi (create `wpa_supplicant.conf` if headless)
-4. Insert SD card and power on Pi
-5. SSH into Pi and update system:
+
+2. **Enable SSH** — create an empty file named `ssh` on the boot
+   partition before first boot. Without this file SSH will not start:
    ```bash
-   sudo apt update && sudo apt upgrade -y
+   touch /media/$USER/bootfs/ssh
+   ```
+
+3. **Configure cloud-init** — edit `user-data` on the boot partition
+   to set hostname, user, SSH key, and packages. Minimum
+   `user-data` for this project:
+   ```yaml
+   #cloud-config
+   hostname: pi-fox-beacon
+   manage_etc_hosts: true
+   users:
+     - name: tsayles
+       groups: adm,dialout,sudo,audio,video,plugdev,users,input,netdev,spi,i2c,gpio
+       sudo: ALL=(ALL) NOPASSWD:ALL
+       shell: /bin/bash
+       ssh_authorized_keys:
+         - <your public key from ~/.ssh/id_ed25519.pub>
+   packages:
+     - openssh-server
+     - avahi-daemon
+     - git
+     - python3-numpy
+     - python3-serial
+     - python3-yaml
+     - alsa-utils
+   package_update: true
+   runcmd:
+     - systemctl enable ssh
+     - systemctl start ssh
+     - systemctl enable avahi-daemon
+     - su - tsayles -c "git clone https://github.com/tsayles/pi-fox-beacon.git /home/tsayles/pi-fox-beacon"
+     - cp /home/tsayles/pi-fox-beacon/firmware/mvp/fox-beacon.service /etc/systemd/system/
+     - systemctl daemon-reload
+     - systemctl enable fox-beacon
+   ```
+   > **Note:** `openssh-server` must be in the packages list —
+   > it is not enabled by default on Raspberry Pi OS Trixie when
+   > using cloud-init. The `ssh` empty file alone is not sufficient.
+
+4. Enable DHCP on ethernet — edit `network-config` on the boot
+   partition:
+   ```yaml
+   network:
+     version: 2
+     ethernets:
+       eth0:
+         dhcp4: true
+         optional: false
+   ```
+
+5. Unmount/eject SD card, insert into Pi, and power on.
+   First boot takes **3–5 minutes** while cloud-init runs
+   (`apt update`, package install, git clone).
+
+6. SSH in once it's up:
+   ```bash
+   ssh tsayles@pi-fox-beacon.local
+   # or by IP if mDNS isn't resolving:
+   ssh tsayles@<dhcp-ip>
    ```
 
 ### Step 2: Install MVP Firmware
+
+The cloud-init `runcmd` above handles this automatically on first boot.
+To do it manually:
 
 1. Clone repository:
    ```bash
@@ -60,15 +120,15 @@ writing — skip steps 2–3 below if you use it.
 2. Install Python dependencies:
    ```bash
    cd firmware/mvp
-   pip install -r requirements.txt
+   pip install -r requirements.txt --break-system-packages
    ```
-   *(includes pyserial for AIOC PTT control)*
 
-3. Copy and edit configuration:
+3. Install and enable the systemd service:
    ```bash
-   cp config.yaml my-config.yaml
-   nano my-config.yaml
-   # Set your callsign, AIOC serial port, beacon interval, etc.
+   sudo cp firmware/mvp/fox-beacon.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable fox-beacon
+   sudo systemctl start fox-beacon
    ```
 
 ### Step 3: Connect Hardware
