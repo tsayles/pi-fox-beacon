@@ -6,11 +6,11 @@ Quick reference for assembling and configuring the MVP beacon hardware using the
 
 ## Bill of Materials
 
-| Item | Part Number | Vendor | Order Date | Status |
-|------|------------|--------|------------|--------|
-| Raspberry Pi 3 Model B+ | — | SparkFun | 2026-08-08 | Order #430326 |
-| NA6D AIOC Adapter | All-In-One Cable (USB-C, Kenwood K1) | na6d.com | TBD | To order |
-| Baofeng K5PLUS | 10W tri-band HT (ASIN B0GTDDRGY7) | Amazon | — | On hand |
+| Item | Part Number | Vendor | Status |
+|------|------------|--------|--------|
+| Raspberry Pi 3 Model B+ | — | SparkFun | On hand |
+| NA6D AIOC Adapter | All-In-One Cable (USB-C, Kenwood K1) | na6d.com | On hand |
+| Baofeng K5PLUS | 10W tri-band HT (ASIN B0GTDDRGY7) | Amazon | On hand |
 
 **AIOC:** Single USB-C device providing USB sound card + hardware PTT + radio programming. Replaces the separate USB audio dongle and BTECH APRS-K1 cable used in the original VOX-only approach.
 
