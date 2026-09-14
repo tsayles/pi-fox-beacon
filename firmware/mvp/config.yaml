@@ -4,7 +4,7 @@ callsign: "KE4HET"
 
 # Beacon interval — synced to system clock.
 # 15 = fires at :00, :15, :30, :45 each minute.
-beacon_interval_seconds: 15
+beacon_interval_seconds: 30
 
 # AIOC PTT (ioctl TIOCMBIS/TIOCMBIC — pyserial dtr alone does not work)
 ptt:
