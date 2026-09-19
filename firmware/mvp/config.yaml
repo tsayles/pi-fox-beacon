@@ -1,6 +1,6 @@
 # Beacon Configuration
 
-callsign: "KE4HET"
+callsign: "K7LED"
 
 # Beacon interval — synced to system clock.
 # 15 = fires at :00, :15, :30, :45 each minute.
